@@ -1,0 +1,168 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net - Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true || 
+        request.auth.token.firebase.sign_in_provider == 'google.com'
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        (request.auth.token.email == 'AmrZikas20@gmail.com' || request.auth.token.email == 'amrzikas20@gmail.com') && 
+        request.auth.token.email_verified == true;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidCart(data) {
+      return data.userId is string 
+        && data.userId.size() <= 128
+        && data.items is list 
+        && data.items.size() <= 100;
+    }
+
+    function isValidOrder(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.userId is string && data.userId.size() <= 128
+        && data.items is list && data.items.size() <= 100
+        && data.subtotal is number && data.subtotal >= 0
+        && data.discount is number && data.discount >= 0
+        && data.total is number && data.total >= 0
+        && data.customerInfo is map
+        && data.customerInfo.fullName is string && data.customerInfo.fullName.size() <= 150
+        && data.customerInfo.email is string && data.customerInfo.email.size() <= 150
+        && data.shippingStatus is string && (data.shippingStatus == 'placed' || data.shippingStatus == 'processing' || data.shippingStatus == 'shipped' || data.shippingStatus == 'delivered')
+        && data.date is string && data.date.size() <= 50
+        && data.trackingNumber is string && data.trackingNumber.size() <= 100;
+    }
+
+    function isValidReview(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.productId is string && data.productId.size() <= 128
+        && data.userId is string && data.userId.size() <= 128
+        && data.userName is string && data.userName.size() <= 150
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() <= 5000
+        && data.date is string && data.date.size() <= 50;
+    }
+
+    function isValidProduct(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 200
+        && data.nameAr is string && data.nameAr.size() <= 200
+        && data.price is number && data.price >= 0
+        && data.category is string && data.category.size() > 0
+        && data.image is string && data.image.size() <= 2000
+        && data.stock is number && data.stock >= 0;
+    }
+
+    function isValidGateway(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.nameAr is string && data.nameAr.size() <= 100
+        && data.status is string && (data.status == 'active' || data.status == 'inactive');
+    }
+
+    function isValidShippingPlan(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.nameAr is string && data.nameAr.size() <= 100
+        && data.cost is number && data.cost >= 0
+        && data.deliveryTime is string && data.deliveryTime.size() <= 100
+        && data.status is string && (data.status == 'active' || data.status == 'inactive');
+    }
+
+    // --- Match Rules ---
+
+    // Shopping Carts collection per user
+    match /carts/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidCart(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+
+    // Customer Orders collection
+    match /orders/{orderId} {
+      // Secure list query verification (Query Enforcer)
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Creating orders
+      allow create: if isVerified() 
+        && request.resource.data.userId == request.auth.uid
+        && isValidOrder(request.resource.data)
+        && isValidId(orderId);
+        
+      // Orders can be updated by admin (to change shippingStatus)
+      allow update: if isAdmin() && isValidOrder(request.resource.data);
+      allow delete: if false;
+    }
+
+    // Reviews collection (Publicly readable, but authenticated users can create)
+    match /reviews/{reviewId} {
+      allow read: if true;
+      
+      allow create: if isVerified() 
+        && request.resource.data.userId == request.auth.uid
+        && isValidReview(request.resource.data)
+        && isValidId(reviewId);
+
+      // Reviews can be modified or deleted only by their author or admin
+      allow update: if isVerified()
+        && (resource.data.userId == request.auth.uid || isAdmin())
+        && (request.resource.data.userId == resource.data.userId)
+        && isValidReview(request.resource.data);
+
+      allow delete: if isVerified()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Products collection (Publicly readable, Admin writeable)
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidProduct(request.resource.data) && isValidId(productId);
+      allow delete: if isAdmin();
+    }
+
+    // Categories collection (Publicly readable, Admin writeable)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(categoryId);
+      allow delete: if isAdmin();
+    }
+
+    // Payment Gateways collection (Publicly readable, Admin writeable)
+    match /gateways/{gatewayId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidGateway(request.resource.data) && isValidId(gatewayId);
+      allow delete: if isAdmin();
+    }
+
+    // Shipping Plans collection (Publicly readable, Admin writeable)
+    match /shippingPlans/{planId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidShippingPlan(request.resource.data) && isValidId(planId);
+      allow delete: if isAdmin();
+    }
+  }
+}

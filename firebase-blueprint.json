@@ -1,0 +1,180 @@
+{
+  "entities": {
+    "CustomerInfo": {
+      "title": "CustomerInfo",
+      "description": "Shipping address and contact details of the customer.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string", "description": "Full name of the customer." },
+        "email": { "type": "string", "format": "email", "description": "Email address." },
+        "phone": { "type": "string", "description": "Phone number." },
+        "address": { "type": "string", "description": "Street address." },
+        "city": { "type": "string", "description": "City." },
+        "postalCode": { "type": "string", "description": "Postal code." }
+      },
+      "required": ["fullName", "email", "phone", "address", "city", "postalCode"]
+    },
+    "ProductSummary": {
+      "title": "ProductSummary",
+      "description": "A minimal product snapshot stored inside nested schemas.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "price": { "type": "number" },
+        "image": { "type": "string" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" }
+      },
+      "required": ["id", "name", "nameAr", "price", "image", "category"]
+    },
+    "CartItem": {
+      "title": "CartItem",
+      "description": "An item inside the shopping cart.",
+      "type": "object",
+      "properties": {
+        "product": { "$ref": "#/entities/ProductSummary" },
+        "quantity": { "type": "number" }
+      },
+      "required": ["product", "quantity"]
+    },
+    "Cart": {
+      "title": "Cart",
+      "description": "The user's shopping cart containing list of cart items.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/entities/CartItem" }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "items"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A customer order submitted for processing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/entities/CartItem" }
+        },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "customerInfo": { "$ref": "#/entities/CustomerInfo" },
+        "shippingStatus": { "type": "string", "enum": ["placed", "processing", "shipped", "delivered"] },
+        "date": { "type": "string" },
+        "trackingNumber": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "items", "subtotal", "discount", "total", "customerInfo", "shippingStatus", "date", "trackingNumber"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A customer review left on a product.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "date": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "merchantResponse": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "productId", "userId", "userName", "rating", "comment", "date"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A fully detailed luxury product in the store database.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "description": { "type": "string" },
+        "descriptionAr": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string", "enum": ["apparel", "wellness", "home", "tech"] },
+        "categoryAr": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "image": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "featuresAr": { "type": "array", "items": { "type": "string" } },
+        "specs": { "type": "object" },
+        "specsAr": { "type": "object" },
+        "stock": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "nameAr", "price", "category", "image", "stock"]
+    },
+    "PaymentGateway": {
+      "title": "PaymentGateway",
+      "description": "A payment gateway configuration.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "description": { "type": "string" },
+        "descriptionAr": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "apiKey": { "type": "string" },
+        "merchantId": { "type": "string" }
+      },
+      "required": ["id", "name", "nameAr", "status"]
+    },
+    "ShippingPlan": {
+      "title": "ShippingPlan",
+      "description": "A shipping plan option available at checkout.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "cost": { "type": "number" },
+        "deliveryTime": { "type": "string" },
+        "deliveryTimeAr": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["id", "name", "nameAr", "cost", "deliveryTime", "status"]
+    }
+  },
+  "firestore": {
+    "/carts/{userId}": {
+      "schema": "Cart",
+      "description": "Stores user cart items for cross-session and cross-device persistent cart retrieval."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer order documents."
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product reviews with intelligent tags and merchant responses."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products in the store database."
+    },
+    "/gateways/{gatewayId}": {
+      "schema": "PaymentGateway",
+      "description": "Payment gateways configurations."
+    },
+    "/shippingPlans/{planId}": {
+      "schema": "ShippingPlan",
+      "description": "Shipping plans configurations."
+    }
+  }
+}
