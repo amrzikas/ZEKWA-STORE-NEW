@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Edit2, Trash2, ShieldAlert, DollarSign, Truck, Package, 
   Clock, CheckCircle, CreditCard, Lock, Unlock, Settings, Eye, 
-  RefreshCw, ClipboardList, Check, X, AlertCircle, Sparkles, LogOut
+  RefreshCw, ClipboardList, Check, X, AlertCircle, Sparkles, LogOut, Sliders
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -26,6 +26,8 @@ export interface PaymentGateway {
   status: 'active' | 'inactive';
   apiKey?: string;
   merchantId?: string;
+  phone?: string;
+  paymentAddress?: string;
 }
 
 export interface ShippingPlan {
@@ -45,7 +47,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
   const [authError, setAuthError] = useState('');
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'gateways' | 'shipping' | 'categories'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'gateways' | 'shipping' | 'categories' | 'settings'>('products');
 
   // Firestore Data States
   const [products, setProducts] = useState<Product[]>([]);
@@ -76,6 +78,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     stock: 10,
     features: '',
     featuresAr: '',
+    isFeatured: false,
   });
 
   // Dynamic Category Form States
@@ -105,7 +108,9 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     descriptionAr: '',
     status: 'active' as 'active' | 'inactive',
     apiKey: '',
-    merchantId: ''
+    merchantId: '',
+    phone: '',
+    paymentAddress: ''
   });
 
   // New Shipping Plan Form State
@@ -122,6 +127,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
 
   // Selected Order Detail
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [zoomedReceiptImage, setZoomedReceiptImage] = useState<string | null>(null);
 
   // 1. Check if user is super admin email or already verified
   useEffect(() => {
@@ -260,7 +266,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       specs: editingProduct ? editingProduct.specs : {},
       specsAr: editingProduct ? editingProduct.specsAr : {},
       stock: Number(productForm.stock),
-      isFeatured: true
+      isFeatured: !!productForm.isFeatured
     };
 
     try {
@@ -290,6 +296,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       stock: 10,
       features: '',
       featuresAr: '',
+      isFeatured: false,
     });
   };
 
@@ -320,6 +327,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       stock: prod.stock,
       features: prod.features ? prod.features.join('\n') : '',
       featuresAr: prod.featuresAr ? prod.featuresAr.join('\n') : '',
+      isFeatured: !!prod.isFeatured,
     });
     setShowProductModal(true);
   };
@@ -443,6 +451,20 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     }
   };
 
+  // Update Order Payment Status
+  const handleUpdateOrderPaymentStatus = async (orderId: string, nextPaymentStatus: 'verified' | 'rejected' | 'pending_verification') => {
+    try {
+      await updateDoc(doc(db, 'orders', orderId), {
+        paymentStatus: nextPaymentStatus
+      });
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(prev => prev ? { ...prev, paymentStatus: nextPaymentStatus } : null);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
+    }
+  };
+
   // Gateway Submit
   const handleGatewaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -457,7 +479,9 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       descriptionAr: gatewayForm.descriptionAr,
       status: gatewayForm.status,
       apiKey: gatewayForm.apiKey,
-      merchantId: gatewayForm.merchantId
+      merchantId: gatewayForm.merchantId,
+      phone: gatewayForm.phone,
+      paymentAddress: gatewayForm.paymentAddress
     };
 
     try {
@@ -471,7 +495,9 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
         descriptionAr: '',
         status: 'active',
         apiKey: '',
-        merchantId: ''
+        merchantId: '',
+        phone: '',
+        paymentAddress: ''
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `gateways/${gwId}`);
@@ -621,11 +647,11 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
 
   // ------------------ MAIN DASHBOARD UI ------------------
   return (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-end font-sans overflow-hidden" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center font-sans overflow-hidden" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
       <motion.div 
         initial={{ x: isArabic ? -100 : 100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        className="w-full max-w-6xl h-full bg-white shadow-2xl flex flex-col relative"
+        className="w-full h-full bg-white shadow-2xl flex flex-col relative"
       >
         {/* Header bar */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-indigo-50/20">
@@ -745,6 +771,19 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
               >
                 <Truck className="w-4 h-4" />
                 <span>{isArabic ? 'خطط الشحن والتسليم' : 'Shipping Plans'}</span>
+              </button>
+
+              {/* Site Settings */}
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`w-full px-4 py-3 text-xs font-black tracking-wider transition-all rounded-xl cursor-pointer flex items-center gap-3 ${
+                  activeTab === 'settings'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Sliders className="w-4 h-4" />
+                <span>{isArabic ? 'إعدادات الموقع المتقدمة' : 'Site Settings'}</span>
               </button>
             </div>
 
@@ -880,6 +919,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                               <th className="px-4 py-3">{isArabic ? 'العميل' : 'Customer'}</th>
                               <th className="px-4 py-3 text-center">{isArabic ? 'التاريخ' : 'Date'}</th>
                               <th className="px-4 py-3 text-center">{isArabic ? 'الإجمالي' : 'Total'}</th>
+                              <th className="px-4 py-3 text-center">{isArabic ? 'الدفع' : 'Payment'}</th>
                               <th className="px-4 py-3 text-center">{isArabic ? 'الحالة' : 'Status'}</th>
                               <th className="px-4 py-3 text-center">{isArabic ? 'معاينة' : 'View'}</th>
                             </tr>
@@ -905,6 +945,22 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                                 </td>
                                 <td className="px-4 py-3 text-center font-black text-indigo-600">
                                   {order.total} {isArabic ? 'ر.س' : 'SAR'}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[10px] text-slate-700 block max-w-[100px] truncate">
+                                      {order.paymentGatewayName || (isArabic ? 'بطاقة ائتمانية' : 'Credit Card')}
+                                    </span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase mt-1 inline-block ${
+                                      order.paymentStatus === 'verified' ? 'bg-emerald-50 text-emerald-600' :
+                                      order.paymentStatus === 'rejected' ? 'bg-red-50 text-red-500' :
+                                      'bg-amber-50 text-amber-600'
+                                    }`}>
+                                      {order.paymentStatus === 'verified' ? (isArabic ? 'مقبول' : 'Verified') :
+                                       order.paymentStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
+                                       (isArabic ? 'قيد المراجعة' : 'Pending')}
+                                    </span>
+                                  </div>
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <span className={`px-2 py-0.5 rounded-lg text-[10px] inline-block font-black uppercase ${
@@ -993,41 +1049,133 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                               </div>
                             </div>
 
+                            {/* Payment details and actions */}
+                            <div className="space-y-2 pt-2 border-t border-slate-200/60 text-xs">
+                              <h5 className="font-black text-slate-700 flex items-center gap-1">
+                                <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>{isArabic ? 'تفاصيل الدفع والتحقق' : 'Payment & Verification'}</span>
+                              </h5>
+
+                              <div className="p-3 bg-white border border-slate-200/50 rounded-xl space-y-3 font-bold">
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className="text-slate-400">{isArabic ? 'طريقة الدفع:' : 'Payment Method:'}</span>
+                                  <span className="text-slate-800 font-black">
+                                    {selectedOrder.paymentGatewayName || (isArabic ? 'بطاقة ائتمانية' : 'Credit Card')}
+                                  </span>
+                                </div>
+
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className="text-slate-400">{isArabic ? 'حالة الدفع:' : 'Payment Status:'}</span>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                    selectedOrder.paymentStatus === 'verified' ? 'bg-emerald-50 text-emerald-600' :
+                                    selectedOrder.paymentStatus === 'rejected' ? 'bg-red-50 text-red-500' :
+                                    'bg-amber-50 text-amber-600'
+                                  }`}>
+                                    {selectedOrder.paymentStatus === 'verified' ? (isArabic ? 'مقبول / مؤكد' : 'Verified') :
+                                     selectedOrder.paymentStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
+                                     (isArabic ? 'بانتظار التحقق' : 'Pending')}
+                                  </span>
+                                </div>
+
+                                {/* Uploaded transfer receipt preview */}
+                                {selectedOrder.receiptImage && (
+                                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                    <span className="text-[10px] text-slate-400 block font-black">{isArabic ? 'إيصال التحويل المرفق من العميل:' : 'Attached Transfer Receipt:'}</span>
+                                    <div className="relative group overflow-hidden rounded-xl border border-slate-200 max-h-36">
+                                      <img 
+                                        src={selectedOrder.receiptImage} 
+                                        alt="Payment Receipt" 
+                                        className="w-full h-auto object-cover max-h-32 hover:scale-105 transition duration-300" 
+                                      />
+                                      <button 
+                                        type="button"
+                                        onClick={() => setZoomedReceiptImage(selectedOrder.receiptImage || null)}
+                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity text-[10px] font-black gap-1 cursor-pointer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                        <span>{isArabic ? 'تكبير الإيصال' : 'Zoom Receipt'}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Payment verification actions */}
+                                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                  <button
+                                    onClick={() => handleUpdateOrderPaymentStatus(selectedOrder.id, 'verified')}
+                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+                                      selectedOrder.paymentStatus === 'verified'
+                                        ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/10'
+                                        : 'bg-white text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
+                                    }`}
+                                  >
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span>{isArabic ? 'الموافقة على الدفع' : 'Approve Payment'}</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateOrderPaymentStatus(selectedOrder.id, 'rejected')}
+                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+                                      selectedOrder.paymentStatus === 'rejected'
+                                        ? 'bg-red-600 text-white shadow-sm shadow-red-600/10'
+                                        : 'bg-white text-red-600 hover:bg-red-50 border border-red-200'
+                                    }`}
+                                  >
+                                    <X className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span>{isArabic ? 'رفض الدفع' : 'Reject Payment'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
                             {/* Shipping Status Action Buttons */}
                             <div className="space-y-2 pt-2 border-t border-slate-200/60">
-                              <h5 className="text-xs font-black text-slate-700">{isArabic ? 'تحديث حالة الشحن السحابية' : 'Update Tracking Status'}</h5>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'processing')}
-                                  className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
-                                    selectedOrder.shippingStatus === 'processing'
-                                      ? 'bg-amber-600 text-white'
-                                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                  }`}
-                                >
-                                  {isArabic ? 'قيد التجهيز' : 'Processing'}
-                                </button>
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'shipped')}
-                                  className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
-                                    selectedOrder.shippingStatus === 'shipped'
-                                      ? 'bg-blue-600 text-white'
-                                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                  }`}
-                                >
-                                  {isArabic ? 'تم الشحن' : 'Shipped'}
-                                </button>
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'delivered')}
-                                  className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center col-span-2 ${
-                                    selectedOrder.shippingStatus === 'delivered'
-                                      ? 'bg-emerald-600 text-white'
-                                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                  }`}
-                                >
-                                  {isArabic ? 'تم التوصيل بنجاح' : 'Mark as Delivered'}
-                                </button>
-                              </div>
+                              <h5 className="text-xs font-black text-slate-700 flex items-center gap-1">
+                                <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>{isArabic ? 'تحديث حالة الشحن والتوصيل' : 'Update Shipping Status'}</span>
+                              </h5>
+
+                              {selectedOrder.paymentStatus === 'verified' ? (
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <button
+                                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'processing')}
+                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
+                                      selectedOrder.shippingStatus === 'processing'
+                                        ? 'bg-amber-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                  >
+                                    {isArabic ? 'قيد التجهيز' : 'Processing'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'shipped')}
+                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
+                                      selectedOrder.shippingStatus === 'shipped'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                  >
+                                    {isArabic ? 'تم الشحن' : 'Shipped'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'delivered')}
+                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center col-span-2 ${
+                                      selectedOrder.shippingStatus === 'delivered'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                  >
+                                    {isArabic ? 'تم التوصيل بنجاح' : 'Mark as Delivered'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                                  <p className="text-[10px] text-amber-700 font-black leading-relaxed">
+                                    {isArabic 
+                                      ? '⚠️ يرجى الموافقة أولاً على الدفع الذي قام به العميل لتتمكن من متابعة التجهيز والشحن.' 
+                                      : '⚠️ Please approve customer payment first to unlock preparation and shipping procedures.'}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -1125,6 +1273,26 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                             className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
                           />
                         </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'رقم الهاتف للتحويل (اختياري للتحويل السريع)' : 'Phone Number for Transfer (Optional for quick wallet)'}</label>
+                          <input 
+                            type="text" 
+                            placeholder="01012345678"
+                            value={gatewayForm.phone} 
+                            onChange={(e) => setGatewayForm({...gatewayForm, phone: e.target.value})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'عنوان الدفع / رقم الحساب / الآيبان (اختياري)' : 'Payment Address / Bank Account / IBAN (Optional)'}</label>
+                          <input 
+                            type="text" 
+                            placeholder="EG1234567890123456789012"
+                            value={gatewayForm.paymentAddress} 
+                            onChange={(e) => setGatewayForm({...gatewayForm, paymentAddress: e.target.value})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
 
                         <div className="md:col-span-2 flex justify-end gap-2 pt-2">
                           <button 
@@ -1165,6 +1333,18 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                           {gw.merchantId && (
                             <div className="p-2 bg-slate-50 rounded-lg text-[10px] font-mono text-slate-500 truncate mb-2">
                               MID: {gw.merchantId}
+                            </div>
+                          )}
+                          {gw.phone && (
+                            <div className="p-2 bg-indigo-50/50 rounded-lg text-[10px] text-indigo-700 mb-2 flex justify-between">
+                              <span>{isArabic ? 'رقم التحويل:' : 'Transfer Phone:'}</span>
+                              <span className="font-mono font-bold">{gw.phone}</span>
+                            </div>
+                          )}
+                          {gw.paymentAddress && (
+                            <div className="p-2 bg-[#F5F5F3] rounded-lg text-[10px] text-slate-700 mb-2 flex justify-between truncate">
+                              <span>{isArabic ? 'عنوان الدفع/الآيبان:' : 'Account/IBAN:'}</span>
+                              <span className="font-mono font-bold">{gw.paymentAddress}</span>
                             </div>
                           )}
                         </div>
@@ -1359,10 +1539,247 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                   </div>
                 </div>
               )}
+
+              {/* ==================== CATEGORIES TAB ==================== */}
+              {activeTab === 'categories' && (
+                <div className="space-y-6 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800">{isArabic ? 'إدارة الفئات والفرعيات' : 'Category & Subcategory Management'}</h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{isArabic ? 'إدارة الفئات الرئيسية والفرعيات لتنسيق هيكل عرض المنتجات وفلاتر البحث.' : 'Add or modify parent categories and subcategories for the product catalog filters.'}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          setShowCategoryForm(true);
+                          setShowSubcategoryForm(false);
+                        }}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isArabic ? 'فئة رئيسية جديدة' : 'New Parent Category'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowSubcategoryForm(true);
+                          setShowCategoryForm(false);
+                          if (categories.length > 0 && !selectedParentCategoryId) {
+                            setSelectedParentCategoryId(categories[0].id);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isArabic ? 'فئة فرعية جديدة' : 'New Subcategory'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Add Parent Category Form */}
+                  {showCategoryForm && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl space-y-4"
+                    >
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                        <h4 className="text-xs font-black text-slate-800">{isArabic ? 'إنشاء فئة رئيسية جديدة' : 'Create New Parent Category'}</h4>
+                        <button onClick={() => setShowCategoryForm(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                      </div>
+
+                      <form onSubmit={handleCategorySubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'المعرف الفريد (ID بالإنجليزية)' : 'Unique Category ID (English)'}</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="e.g. accessories"
+                            value={categoryForm.id} 
+                            onChange={(e) => setCategoryForm({...categoryForm, id: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'الاسم بالإنجليزية' : 'Name (English)'}</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="e.g. Accessories"
+                            value={categoryForm.name} 
+                            onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'الاسم بالعربية' : 'Name (Arabic)'}</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="مثال: الإكسسوارات الفاخرة"
+                            value={categoryForm.nameAr} 
+                            onChange={(e) => setCategoryForm({...categoryForm, nameAr: e.target.value})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+
+                        <div className="md:col-span-3 flex justify-end gap-2 pt-2">
+                          <button 
+                            type="button" 
+                            onClick={() => setShowCategoryForm(false)}
+                            className="px-4 py-2 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition cursor-pointer"
+                          >
+                            {isArabic ? 'إلغاء' : 'Cancel'}
+                          </button>
+                          <button 
+                            type="submit" 
+                            className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer"
+                          >
+                            {isArabic ? 'إضافة الفئة الرئيسية' : 'Save Category'}
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  )}
+
+                  {/* Add Subcategory Form */}
+                  {showSubcategoryForm && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl space-y-4"
+                    >
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                        <h4 className="text-xs font-black text-slate-800">{isArabic ? 'إنشاء فئة فرعية جديدة' : 'Create New Subcategory'}</h4>
+                        <button onClick={() => setShowSubcategoryForm(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                      </div>
+
+                      <form onSubmit={handleSubcategorySubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-bold">
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'الفئة الرئيسية الحاضنة' : 'Parent Category'}</label>
+                          <select
+                            value={selectedParentCategoryId}
+                            onChange={(e) => setSelectedParentCategoryId(e.target.value)}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                          >
+                            {categories.map(c => (
+                              <option key={c.id} value={c.id}>{isArabic ? c.nameAr : c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'معرف الفئة الفرعية (ID بالإنجليزية)' : 'Subcategory ID (English)'}</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="e.g. sunglasses"
+                            value={subcategoryForm.id} 
+                            onChange={(e) => setSubcategoryForm({...subcategoryForm, id: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'الاسم بالإنجليزية' : 'Name (English)'}</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="e.g. Sunglasses"
+                            value={subcategoryForm.name} 
+                            onChange={(e) => setSubcategoryForm({...subcategoryForm, name: e.target.value})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'الاسم بالعربية' : 'Name (Arabic)'}</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="مثال: نظارات شمسية"
+                            value={subcategoryForm.nameAr} 
+                            onChange={(e) => setSubcategoryForm({...subcategoryForm, nameAr: e.target.value})}
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                          />
+                        </div>
+
+                        <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+                          <button 
+                            type="button" 
+                            onClick={() => setShowSubcategoryForm(false)}
+                            className="px-4 py-2 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition cursor-pointer"
+                          >
+                            {isArabic ? 'إلغاء' : 'Cancel'}
+                          </button>
+                          <button 
+                            type="submit" 
+                            className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer"
+                          >
+                            {isArabic ? 'إضافة الفئة الفرعية' : 'Save Subcategory'}
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  )}
+
+                  {/* Categories Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {categories.map((cat) => (
+                      <div 
+                        key={cat.id} 
+                        className="p-5 bg-white border-2 border-slate-50 hover:border-slate-100 rounded-3xl shadow-sm relative flex flex-col justify-between font-bold text-xs"
+                      >
+                        <div>
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="font-black text-sm text-slate-800">{isArabic ? cat.nameAr : cat.name}</h4>
+                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">{cat.id}</p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                              title={isArabic ? 'حذف الفئة الرئيسية بالكامل' : 'Delete Parent Category'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <span className="text-[10px] text-slate-400 block font-bold">
+                              {isArabic ? 'الفئات الفرعية المندرجة:' : 'Nested Subcategories:'}
+                            </span>
+                            
+                            {cat.subcategories && cat.subcategories.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {cat.subcategories.map((sub) => (
+                                  <div 
+                                    key={sub.id} 
+                                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-semibold text-slate-700"
+                                  >
+                                    <span>{isArabic ? sub.nameAr : sub.name}</span>
+                                    <span className="text-[9px] font-mono text-slate-400">({sub.id})</span>
+                                    <button
+                                      onClick={() => handleDeleteSubcategory(cat.id, sub.id)}
+                                      className="text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition cursor-pointer"
+                                      title={isArabic ? 'حذف الفئة الفرعية' : 'Delete Subcategory'}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 italic font-medium">{isArabic ? 'لا توجد فئات فرعية مضافة بعد.' : 'No subcategories registered.'}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
-      </motion.div>
+      </div>
+    </motion.div>
 
       {/* ==================== PRODUCT FORM MODAL ==================== */}
       {showProductModal && (
@@ -1370,7 +1787,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
           <motion.div 
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white border-2 border-indigo-50 max-w-2xl w-full p-6 rounded-3xl shadow-2xl space-y-4"
+            className="bg-white border-2 border-indigo-50 max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 rounded-3xl shadow-2xl space-y-4 scrollbar-none"
           >
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="text-sm font-black text-slate-800">
@@ -1389,6 +1806,20 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
 
             <form onSubmit={handleProductSubmit} className="space-y-4 text-xs font-bold text-slate-600">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Featured Products Toggle checkbox */}
+                <div className="md:col-span-2 flex items-center gap-3 p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-2">
+                  <input 
+                    type="checkbox" 
+                    id="isFeaturedProductCheckbox"
+                    checked={productForm.isFeatured} 
+                    onChange={(e) => setProductForm({...productForm, isFeatured: e.target.checked})}
+                    className="w-4.5 h-4.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" 
+                  />
+                  <label htmlFor="isFeaturedProductCheckbox" className="text-xs text-slate-700 font-bold cursor-pointer select-none">
+                    {isArabic ? 'عرض هذا المنتج في قسم "المنتجات المميزة" (Featured Products) بالصفحة الرئيسية' : 'Show this product in the "Featured Products" homepage section'}
+                  </label>
+                </div>
+
                 {!editingProduct && (
                   <div className="md:col-span-2">
                     <label className="block text-slate-500 mb-1">{isArabic ? 'المعرف الفريد للمنتج' : 'Unique Product ID'}</label>
@@ -1562,6 +1993,30 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
               </div>
             </form>
           </motion.div>
+        </div>
+      )}
+
+      {/* Zoomed Receipt Lightbox Modal */}
+      {zoomedReceiptImage && (
+        <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4">
+          <div className="relative max-w-3xl w-full max-h-[90vh] bg-white rounded-3xl overflow-hidden p-6 shadow-2xl flex flex-col items-center">
+            <button
+              onClick={() => setZoomedReceiptImage(null)}
+              className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-full transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-sm font-black text-slate-800 mb-4 font-sans text-center">
+              {isArabic ? 'إثبات تحويل المبلغ (الإيصال)' : 'Bank Transfer Confirmation Receipt'}
+            </h3>
+            <div className="flex-1 w-full overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl border-2 border-slate-100 p-2">
+              <img
+                src={zoomedReceiptImage}
+                alt="Zoomed Payment Receipt"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

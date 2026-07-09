@@ -2,6 +2,7 @@ import React from 'react';
 import { Star, Eye, ShoppingCart, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Product } from '../types';
+import { formatPrice } from '../utils';
 
 interface ProductCardProps {
   key?: React.Key;
@@ -10,9 +11,10 @@ interface ProductCardProps {
   onAddToCart: (product: Product) => void;
   isArabic: boolean;
   isCompact?: boolean;
+  currency?: string;
 }
 
-export default function ProductCard({ product, onSelect, onAddToCart, isArabic, isCompact = false }: ProductCardProps) {
+export default function ProductCard({ product, onSelect, onAddToCart, isArabic, isCompact = false, currency = 'SAR' }: ProductCardProps) {
   const isLowStock = product.stock <= 5;
 
   return (
@@ -95,7 +97,7 @@ export default function ProductCard({ product, onSelect, onAddToCart, isArabic, 
         <div className={`flex items-center justify-between mt-auto pt-2.5 border-t border-slate-100`}>
           <div>
             <span className="text-[9px] text-slate-400 block -mb-0.5">{isArabic ? 'السعر' : 'Price'}</span>
-            <span className={`${isCompact ? 'text-base' : 'text-xl'} font-black text-indigo-600`}>${product.price}</span>
+            <span className={`${isCompact ? 'text-base' : 'text-xl'} font-black text-indigo-600`}>{formatPrice(product.price, currency, isArabic)}</span>
           </div>
 
           <button

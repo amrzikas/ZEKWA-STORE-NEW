@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CartItem, CustomerInfo, Order, ShippingStatus } from '../types';
 import { db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { formatPrice } from '../utils';
 
 interface CheckoutWizardProps {
   cart: CartItem[];
@@ -13,6 +14,7 @@ interface CheckoutWizardProps {
   onComplete: (order: Order) => void;
   onCancel: () => void;
   isArabic: boolean;
+  currency?: string;
 }
 
 export default function CheckoutWizard({
@@ -22,7 +24,8 @@ export default function CheckoutWizard({
   couponCode,
   onComplete,
   onCancel,
-  isArabic
+  isArabic,
+  currency = 'SAR'
 }: CheckoutWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1: Delivery, 2: Payment, 3: Processing
   
@@ -46,6 +49,10 @@ export default function CheckoutWizard({
   const [shippingPlans, setShippingPlans] = useState<any[]>([]);
   const [selectedGatewayId, setSelectedGatewayId] = useState<string>('credit_card');
   const [selectedShippingPlan, setSelectedShippingPlan] = useState<any | null>(null);
+
+  // Manual Receipt verification state
+  const [receiptImage, setReceiptImage] = useState<string>('');
+  const [receiptError, setReceiptError] = useState<string>('');
 
   useEffect(() => {
     // Fetch active gateways from Firestore
@@ -94,8 +101,60 @@ export default function CheckoutWizard({
     setStep(2);
   };
 
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        const MAX_WIDTH = 600;
+        const MAX_HEIGHT = 600;
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        setReceiptImage(dataUrl);
+        setReceiptError('');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handlePaymentSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    // Validate manual receipt if manual gateway is chosen
+    if (selectedGatewayId !== 'credit_card') {
+      if (!receiptImage) {
+        setReceiptError(isArabic 
+          ? 'يرجى رفع صورة إثبات التحويل أولاً لإتمام الطلب.' 
+          : 'Please upload the transfer confirmation receipt first.'
+        );
+        return;
+      }
+    }
+
     setStep(3);
 
     // Simulate luxury order verification processing
@@ -110,6 +169,7 @@ export default function CheckoutWizard({
       };
 
       const trackingNumber = `ZW-${Math.floor(10000 + Math.random() * 90000)}-${city.slice(0, 3).toUpperCase()}`;
+      const chosenGateway = gateways.find(g => g.id === selectedGatewayId);
       const newOrder: Order = {
         id: `ord-${Math.random().toString(36).substr(2, 9)}`,
         items: [...cart],
@@ -119,7 +179,11 @@ export default function CheckoutWizard({
         customerInfo,
         shippingStatus: 'placed' as ShippingStatus,
         date: new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US'),
-        trackingNumber
+        trackingNumber,
+        paymentGatewayId: selectedGatewayId,
+        paymentGatewayName: chosenGateway ? (isArabic ? chosenGateway.nameAr : chosenGateway.name) : 'Credit Card',
+        paymentStatus: selectedGatewayId === 'credit_card' ? 'verified' : 'pending_verification',
+        receiptImage: selectedGatewayId === 'credit_card' ? '' : receiptImage
       };
 
       onComplete(newOrder);
@@ -278,7 +342,7 @@ export default function CheckoutWizard({
                                 <p className="text-[10px] text-slate-400 font-bold">{isArabic ? plan.deliveryTimeAr : plan.deliveryTime}</p>
                               </div>
                               <span className="text-xs font-bold font-mono text-[#C5A880]">
-                                {plan.cost === 0 ? (isArabic ? 'مجاني' : 'FREE') : `$${plan.cost}`}
+                                {plan.cost === 0 ? (isArabic ? 'مجاني' : 'FREE') : formatPrice(plan.cost, currency, isArabic)}
                               </span>
                             </div>
                           ))}
@@ -342,22 +406,86 @@ export default function CheckoutWizard({
                         <p className="font-extrabold text-[#1D1D1C] text-sm">
                           {isArabic ? 'بوابة دفع معتمدة' : 'Verified Gateway Checkout'}
                         </p>
-                        <p className="text-slate-500">
+                        <p className="text-slate-500 text-[11px]">
                           {isArabic ? 'لقد اخترت الدفع عبر:' : 'You have chosen settlement via:'} <span className="font-bold text-[#C5A880]">{isArabic ? gateways.find(g => g.id === selectedGatewayId)?.nameAr : gateways.find(g => g.id === selectedGatewayId)?.name}</span>
                         </p>
                       </div>
-                      <p className="text-[11px] text-slate-400 leading-normal max-w-sm mx-auto">
+                      
+                      {/* Gateway Payment Transfer Info */}
+                      {(() => {
+                        const currentGateway = gateways.find(g => g.id === selectedGatewayId);
+                        if (!currentGateway) return null;
+                        const hasPhone = !!currentGateway.phone;
+                        const hasAddress = !!currentGateway.paymentAddress;
+                        if (!hasPhone && !hasAddress) return null;
+                        
+                        return (
+                          <div className="p-4 bg-white/80 border border-[#EAEAE8] rounded-2xl text-[11px] space-y-2 text-right font-bold max-w-sm mx-auto animate-fade-in" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                            <p className="font-black text-slate-800 border-b border-slate-100 pb-1.5 mb-1.5">{isArabic ? 'بيانات التحويل السريع:' : 'Boutique Settlement Account:'}</p>
+                            {hasPhone && (
+                              <div className="flex justify-between items-center gap-4">
+                                <span className="text-slate-400">{isArabic ? 'رقم الهاتف للتحويل:' : 'Transfer Phone / Mobile:'}</span>
+                                <span className="font-mono text-xs text-[#C5A880] font-black">{currentGateway.phone}</span>
+                              </div>
+                            )}
+                            {hasAddress && (
+                              <div className="flex justify-between items-center gap-4 pt-1 border-t border-slate-50">
+                                <span className="text-slate-400">{isArabic ? 'عنوان الدفع / الحساب:' : 'Payment Address / Account:'}</span>
+                                <span className="font-mono text-xs text-[#C5A880] font-black">{currentGateway.paymentAddress}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Manual Receipt Upload Form */}
+                      <div className="p-5 bg-white border border-slate-200 rounded-3xl max-w-sm mx-auto text-center space-y-3 shadow-sm">
+                        <p className="font-extrabold text-[#1D1D1C] text-[11px] uppercase tracking-wider">
+                          {isArabic ? 'رفع صورة إثبات التحويل (مطلوب)' : 'Upload Transfer Receipt (Required)'}
+                        </p>
+                        
+                        {receiptImage ? (
+                          <div className="space-y-2">
+                            <img src={receiptImage} alt="Receipt Preview" className="w-24 h-24 object-cover mx-auto rounded-xl border border-slate-200 shadow-sm" />
+                            <button 
+                              type="button" 
+                              onClick={() => setReceiptImage('')}
+                              className="text-[10px] text-red-500 font-bold hover:underline block mx-auto cursor-pointer"
+                            >
+                              {isArabic ? 'حذف الصورة وإعادة الرفع' : 'Remove & Re-upload'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed border-slate-200 hover:border-[#C5A880] rounded-2xl p-4 cursor-pointer relative transition-all bg-slate-50/50 hover:bg-slate-50">
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              onChange={handleReceiptUpload} 
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                            />
+                            <p className="text-[10px] text-slate-500 font-bold leading-normal">
+                              {isArabic ? 'اضغط هنا لرفع صورة الإيصال أو اسحبها' : 'Click to upload receipt photo or drag here'}
+                            </p>
+                            <p className="text-[9px] text-slate-400 mt-1">JPEG, PNG</p>
+                          </div>
+                        )}
+                        {receiptError && (
+                          <p className="text-[10px] text-red-500 font-bold">{receiptError}</p>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-slate-400 leading-normal max-w-sm mx-auto font-medium">
                         {isArabic 
-                          ? 'بوابة الدفع هذه مشفرة وآمنة تماماً. لا توجد حاجة لمشاركة بيانات بطاقتك الائتمانية هنا. اضغط أدناه لتأكيد المشتريات وإتمام الطلب.' 
-                          : 'This gateway is encrypted and fully monitored. No credit card details are required. Click below to submit and finalize your boutique order.'}
+                          ? 'يرجى تحويل المبلغ الإجمالي إلى تفاصيل السداد الموضحة أعلاه، ورفع صورة التحويل، ثم الضغط أدناه لتأكيد الطلب لتتحقق الإدارة منه.' 
+                          : 'Please transfer the grand total to the details shown above, upload the screenshot, and click below to place your order for verification.'}
                       </p>
 
                       <button
                         onClick={() => handlePaymentSubmit()}
-                        className="w-full py-4 bg-[#1D1D1C] hover:bg-[#C5A880] text-white text-xs font-bold uppercase tracking-widest rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 mt-2"
+                        className="w-full py-4 bg-[#1D1D1C] hover:bg-[#C5A880] text-white text-xs font-bold uppercase tracking-widest rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 mt-2 shadow-lg"
                       >
                         <Lock className="w-4 h-4" />
-                        <span>{isArabic ? `تأكيد الطلب بقيمة $${total.toFixed(1)}` : `Confirm Order $${total.toFixed(1)}`}</span>
+                        <span>{isArabic ? `تأكيد الطلب بقيمة ${formatPrice(total, currency, isArabic)}` : `Confirm Order ${formatPrice(total, currency, isArabic)}`}</span>
                       </button>
                     </div>
                   ) : (
@@ -478,7 +606,7 @@ export default function CheckoutWizard({
                           className="w-full py-4 bg-[#1D1D1C] hover:bg-[#C5A880] text-white text-xs font-bold uppercase tracking-widest rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center gap-2"
                         >
                           <Lock className="w-4 h-4" />
-                          <span>{isArabic ? `دفع $${total.toFixed(1)} بأمان` : `Pay $${total.toFixed(1)} Securely`}</span>
+                          <span>{isArabic ? `دفع ${formatPrice(total, currency, isArabic)} بأمان` : `Pay ${formatPrice(total, currency, isArabic)} Securely`}</span>
                         </button>
                       </form>
                     </>
@@ -533,7 +661,7 @@ export default function CheckoutWizard({
                         <h4 className="font-bold text-[#1D1D1C] line-clamp-1">{isArabic ? item.product.nameAr : item.product.name}</h4>
                         <span className="text-[10px] text-[#8E8D8A]">{isArabic ? 'الكمية' : 'Qty'} {item.quantity}</span>
                       </div>
-                      <span className="font-bold font-mono">${item.product.price * item.quantity}</span>
+                      <span className="font-bold font-mono">{formatPrice(item.product.price * item.quantity, currency, isArabic)}</span>
                     </div>
                   </div>
                 ))}
@@ -543,26 +671,26 @@ export default function CheckoutWizard({
               <div className="space-y-2.5 pt-4 border-t border-[#EAEAE8] text-xs">
                 <div className="flex justify-between text-[#6C6B67]">
                   <span>{isArabic ? 'المجموع الفرعي' : 'Subtotal'}</span>
-                  <span className="font-mono font-bold">${subtotal}</span>
+                  <span className="font-mono font-bold">{formatPrice(subtotal, currency, isArabic)}</span>
                 </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-700 font-bold">
                     <span>{isArabic ? 'خصم الكوبون' : 'Coupon Discount'}</span>
-                    <span className="font-mono">-${discountAmount.toFixed(1)}</span>
+                    <span className="font-mono">-{formatPrice(discountAmount, currency, isArabic)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between text-[#6C6B67]">
                   <span>{isArabic ? 'قيمة الشحن المميز' : 'Premium Carriage'}</span>
                   <span className="font-mono font-bold">
-                    {shippingCost === 0 ? (isArabic ? 'مجاني' : 'FREE') : `$${shippingCost}`}
+                    {shippingCost === 0 ? (isArabic ? 'مجاني' : 'FREE') : formatPrice(shippingCost, currency, isArabic)}
                   </span>
                 </div>
 
                 <div className="flex justify-between text-sm font-extrabold text-[#1D1D1C] pt-3 border-t border-[#EAEAE8]">
                   <span>{isArabic ? 'المجموع النهائي' : 'Grand Total'}</span>
-                  <span className="font-mono">${total.toFixed(1)}</span>
+                  <span className="font-mono">{formatPrice(total, currency, isArabic)}</span>
                 </div>
               </div>
             </div>

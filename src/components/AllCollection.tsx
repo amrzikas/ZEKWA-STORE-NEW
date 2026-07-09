@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Product, Category } from '../types';
 import ProductCard from './ProductCard';
+import { formatPrice } from '../utils';
 
 interface AllCollectionProps {
   products: Product[];
@@ -27,6 +28,7 @@ interface AllCollectionProps {
   onAddToCart: (product: Product) => void;
   isArabic: boolean;
   categories: Category[];
+  currency?: string;
 }
 
 type SortOption = 'default' | 'price-asc' | 'price-desc' | 'rating' | 'reviews';
@@ -42,7 +44,8 @@ export default function AllCollection({
   onSelectProduct,
   onAddToCart,
   isArabic,
-  categories
+  categories,
+  currency = 'SAR'
 }: AllCollectionProps) {
   // Filters state
   const [maxPrice, setMaxPrice] = useState<number>(350);
@@ -313,7 +316,7 @@ export default function AllCollection({
                 <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
                 {isArabic ? 'الحد الأقصى للسعر' : 'Max Price'}
               </h3>
-              <span className="text-sm font-black text-indigo-600 font-mono">${maxPrice}</span>
+              <span className="text-sm font-black text-indigo-600 font-mono">{formatPrice(maxPrice, currency, isArabic)}</span>
             </div>
             
             <input
@@ -336,7 +339,7 @@ export default function AllCollection({
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
               >
-                {isArabic ? 'تحت $50' : 'Under $50'}
+                {isArabic ? `تحت ${formatPrice(50, currency, isArabic)}` : `Under ${formatPrice(50, currency, isArabic)}`}
               </button>
               <button
                 onClick={() => handlePricePreset(100)}
@@ -346,7 +349,7 @@ export default function AllCollection({
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
               >
-                {isArabic ? 'تحت $100' : 'Under $100'}
+                {isArabic ? `تحت ${formatPrice(100, currency, isArabic)}` : `Under ${formatPrice(100, currency, isArabic)}`}
               </button>
               <button
                 onClick={() => handlePricePreset(200)}
@@ -356,7 +359,7 @@ export default function AllCollection({
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
               >
-                {isArabic ? 'تحت $200' : 'Under $200'}
+                {isArabic ? `تحت ${formatPrice(200, currency, isArabic)}` : `Under ${formatPrice(200, currency, isArabic)}`}
               </button>
               <button
                 onClick={() => handlePricePreset(350)}
@@ -490,7 +493,7 @@ export default function AllCollection({
               {/* Category Pill */}
               {selectedCategory !== 'all' && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold border border-indigo-100">
-                  <span>{isArabic ? categories.find(c => c.id === selectedCategory)?.labelAr : categories.find(c => c.id === selectedCategory)?.labelEn}</span>
+                  <span>{isArabic ? categories.find(c => c.id === selectedCategory)?.nameAr : categories.find(c => c.id === selectedCategory)?.name}</span>
                   <button onClick={() => onCategoryChange('all')} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
                 </span>
               )}
@@ -498,7 +501,7 @@ export default function AllCollection({
               {/* Price Pill */}
               {maxPrice < 350 && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold border border-indigo-100">
-                  <span>{isArabic ? `حتى $${maxPrice}` : `Max $${maxPrice}`}</span>
+                  <span>{isArabic ? `حتى ${formatPrice(maxPrice, currency, isArabic)}` : `Max ${formatPrice(maxPrice, currency, isArabic)}`}</span>
                   <button onClick={() => setMaxPrice(350)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
                 </span>
               )}
@@ -561,6 +564,7 @@ export default function AllCollection({
                   onSelect={onSelectProduct}
                   onAddToCart={onAddToCart}
                   isArabic={isArabic}
+                  currency={currency}
                 />
               ))}
             </div>

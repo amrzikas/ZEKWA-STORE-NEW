@@ -75,4 +75,8 @@ export interface Order {
   shippingStatus: ShippingStatus;
   date: string;
   trackingNumber: string;
+  paymentGatewayId?: string;
+  paymentGatewayName?: string;
+  paymentStatus?: 'pending_verification' | 'verified' | 'rejected' | 'not_applicable';
+  receiptImage?: string;
 }

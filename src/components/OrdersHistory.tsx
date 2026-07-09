@@ -2,14 +2,16 @@ import React from 'react';
 import { X, ClipboardList, Package, Truck, Compass, CheckCircle2, ShoppingBag } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Order } from '../types';
+import { formatPrice } from '../utils';
 
 interface OrdersHistoryProps {
   orders: Order[];
   onClose: () => void;
   isArabic: boolean;
+  currency?: string;
 }
 
-export default function OrdersHistory({ orders, onClose, isArabic }: OrdersHistoryProps) {
+export default function OrdersHistory({ orders, onClose, isArabic, currency = 'SAR' }: OrdersHistoryProps) {
   const steps = [
     { id: 'placed', labelAr: 'تم تقديم الطلب', labelEn: 'Order Placed', icon: Package },
     { id: 'processing', labelAr: 'جارِ التجهيز والتغليف', labelEn: 'Packaging', icon: Compass },
@@ -84,7 +86,7 @@ export default function OrdersHistory({ orders, onClose, isArabic }: OrdersHisto
                         <span className="text-[9px] font-mono tracking-widest text-[#8E8D8A] block uppercase">
                           {isArabic ? 'المبلغ الإجمالي' : 'Settlement Total'}
                         </span>
-                        <span className="font-bold text-[#1D1D1C] font-mono">${order.total.toFixed(1)}</span>
+                        <span className="font-bold text-[#1D1D1C] font-mono">{formatPrice(order.total, currency, isArabic)}</span>
                       </div>
                     </div>
                   </div>
@@ -143,7 +145,7 @@ export default function OrdersHistory({ orders, onClose, isArabic }: OrdersHisto
                               {isArabic ? it.product.nameAr : it.product.name}{' '}
                               <span className="font-mono font-bold text-[#1D1D1C]">×{it.quantity}</span>
                             </span>
-                            <span className="font-mono font-bold">${it.product.price * it.quantity}</span>
+                            <span className="font-mono font-bold">{formatPrice(it.product.price * it.quantity, currency, isArabic)}</span>
                           </div>
                         ))}
                       </div>

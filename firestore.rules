@@ -13,10 +13,7 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isSignedIn() && (
-        request.auth.token.email_verified == true || 
-        request.auth.token.firebase.sign_in_provider == 'google.com'
-      );
+      return isSignedIn();
     }
 
     function isOwner(userId) {
@@ -29,8 +26,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-        (request.auth.token.email == 'AmrZikas20@gmail.com' || request.auth.token.email == 'amrzikas20@gmail.com') && 
-        request.auth.token.email_verified == true;
+        (request.auth.token.email == 'AmrZikas20@gmail.com' || request.auth.token.email == 'amrzikas20@gmail.com');
     }
 
     // --- Validation Blueprints ---
@@ -123,7 +119,7 @@ service cloud.firestore {
       allow read: if true;
       
       allow create: if isVerified() 
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || isAdmin())
         && isValidReview(request.resource.data)
         && isValidId(reviewId);
 

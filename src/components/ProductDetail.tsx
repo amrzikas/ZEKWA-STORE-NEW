@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Star, ShoppingBag, ShieldCheck, Truck, RefreshCw, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Review } from '../types';
+import { formatPrice } from '../utils';
 
 interface ProductDetailProps {
   product: Product;
@@ -10,6 +11,7 @@ interface ProductDetailProps {
   onAddToCart: (product: Product) => void;
   isArabic: boolean;
   onAddReview: (comment: string, rating: number, userName: string) => Promise<void>;
+  currency?: string;
 }
 
 export default function ProductDetail({
@@ -18,7 +20,8 @@ export default function ProductDetail({
   onBack,
   onAddToCart,
   isArabic,
-  onAddReview
+  onAddReview,
+  currency = 'SAR'
 }: ProductDetailProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'reviews'>('details');
   const [newReviewComment, setNewReviewComment] = useState('');
@@ -101,199 +104,203 @@ export default function ProductDetail({
             )}
           </div>
 
-          {/* Product Purchasing Control Panel */}
-          <div className="lg:col-span-6 flex flex-col" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
-            <span className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest mb-2 block">
+          {/* Product Basic Meta Context Details */}
+          <div className="lg:col-span-6 space-y-6" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+            <span className="text-xs font-bold font-mono tracking-widest text-[#C5A880] uppercase block">
               {isArabic ? product.categoryAr : product.category.toUpperCase()}
             </span>
-            <h1 className="text-3xl font-black text-slate-800 mb-3">
-              {isArabic ? product.nameAr : product.name}
-            </h1>
 
-            {/* Ratings Row */}
-            <div className="flex items-center gap-2 mb-6 border-b border-indigo-50 pb-4">
-              <div className="flex items-center text-[#F59E0B]">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'fill-current' : 'text-gray-300'}`}
-                  />
-                ))}
+            <div className="space-y-1.5">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1D1D1C] tracking-tight">
+                {isArabic ? product.nameAr : product.name}
+              </h1>
+              {/* Stars rating */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <div className="flex items-center text-[#F59E0B]">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-3.5 h-3.5 ${i < Math.round(product.rating) ? 'fill-current' : 'text-gray-200'}`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs font-bold text-slate-800">{product.rating}</span>
+                <span className="text-xs text-slate-400 font-bold">({product.reviewsCount} {isArabic ? 'مراجعة موثقة' : 'Verified Reviews'})</span>
               </div>
-              <span className="text-sm font-extrabold text-slate-800">{product.rating}</span>
-              <span className="text-xs text-slate-500">
-                ({product.reviewsCount} {isArabic ? 'تقييم من عملائنا' : 'customer reviews'})
-              </span>
             </div>
 
-            {/* Price Tag */}
-            <div className="mb-6">
-              <span className="text-3xl font-black text-indigo-600">${product.price}</span>
-              <span className="text-xs font-bold text-slate-400 ml-2 block sm:inline">
-                {isArabic ? 'شامل ضريبة القيمة المضافة' : 'VAT inclusive'}
-              </span>
+            {/* Price Box */}
+            <div className="p-6 bg-slate-50 border border-[#EAEAE8] rounded-3xl flex justify-between items-center max-w-md">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider mb-0.5">{isArabic ? 'القيمة الاستثمارية' : 'Boutique Pricing'}</span>
+                <span className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
+                  {formatPrice(product.price, currency, isArabic)}
+                </span>
+              </div>
+              <div className="text-left font-sans" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                  product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {product.stock > 0 ? (isArabic ? 'متوفر للتسليم السريع' : 'In Premium Stock') : (isArabic ? 'نفذت الكمية' : 'Out of Stock')}
+                </span>
+                {product.stock > 0 && product.stock <= 5 && (
+                  <p className="text-[10px] font-bold text-pink-500 mt-1.5">{isArabic ? `متبقي قطع قليلة جداً (${product.stock})` : `Extremely Limited (${product.stock} left)`}</p>
+                )}
+              </div>
             </div>
 
-            {/* Product Brief Description */}
-            <p className="text-sm text-slate-600 leading-relaxed mb-8 font-medium">
-              {isArabic ? product.descriptionAr : product.description}
-            </p>
+            {/* Description Paragraph */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-[#1D1D1C] uppercase tracking-wider">
+                {isArabic ? 'مواصفات القطعة وتفاصيلها' : 'Artisanal Description'}
+              </h3>
+              <p className="text-xs text-[#6C6B67] leading-relaxed max-w-xl font-medium">
+                {isArabic ? product.descriptionAr : product.description}
+              </p>
+            </div>
 
-            {/* Add To Cart Button */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center mb-8">
+            {/* Specifications Lists */}
+            {product.specs && Object.keys(product.specs).length > 0 && (
+              <div className="space-y-2 max-w-md">
+                <h3 className="text-xs font-bold text-[#1D1D1C] uppercase tracking-wider">
+                  {isArabic ? 'المواصفات الفنية للقطعة' : 'Boutique Spec Sheet'}
+                </h3>
+                <div className="border border-[#EAEAE8] rounded-2xl overflow-hidden divide-y divide-[#EAEAE8] text-xs">
+                  {Object.entries(product.specs).map(([key, val], sIdx) => {
+                    const arabicKey = product.specsAr ? Object.keys(product.specsAr)[sIdx] || key : key;
+                    const arabicVal = product.specsAr ? Object.values(product.specsAr)[sIdx] || val : val;
+                    return (
+                      <div key={sIdx} className="grid grid-cols-3 p-3 bg-white">
+                        <span className="font-bold text-[#1D1D1C]">{isArabic ? arabicKey : key}</span>
+                        <span className="col-span-2 text-slate-600 font-medium">{isArabic ? arabicVal : val}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="pt-4 flex flex-col sm:flex-row gap-4 max-w-md">
               <button
                 onClick={() => onAddToCart(product)}
                 disabled={product.stock === 0}
-                className={`w-full sm:flex-1 py-4 text-xs font-black uppercase tracking-widest text-white rounded-xl flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer shadow-lg ${
-                  product.stock === 0
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                    : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] shadow-indigo-600/20'
-                }`}
+                className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-100 disabled:text-slate-400 text-white text-xs font-black uppercase tracking-widest rounded-full shadow-lg shadow-indigo-600/10 cursor-pointer transition-all duration-300 flex items-center justify-center gap-2"
               >
                 <ShoppingBag className="w-4 h-4" />
-                <span>
-                  {product.stock === 0
-                    ? (isArabic ? 'نفذت الكمية' : 'Out of Stock')
-                    : (isArabic ? 'إضافة إلى حقيبة التسوق' : 'Add to Shopping Bag')}
-                </span>
+                <span>{product.stock === 0 ? (isArabic ? 'غير متوفر مؤقتاً' : 'Temporarily Out') : (isArabic ? 'إضافة لحقيبة المشتريات' : 'Secure In Shopping Bag')}</span>
               </button>
             </div>
 
-            {/* High-end Badges Row */}
-            <div className="grid grid-cols-3 gap-4 border-t border-indigo-50 pt-6 text-center text-slate-500">
-              <div className="flex flex-col items-center">
-                <ShieldCheck className="w-5 h-5 text-indigo-600 mb-2" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-800">
-                  {isArabic ? 'أصلي 100%' : '100% Authentic'}
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5">
-                  {isArabic ? 'جودة مضمونة' : 'Guaranteed quality'}
-                </span>
+            {/* Trust Badges */}
+            <div className="grid grid-cols-3 gap-3 pt-6 border-t border-[#EAEAE8] text-center text-[#8E8D8A] font-sans">
+              <div className="space-y-1">
+                <ShieldCheck className="w-5 h-5 text-[#C5A880] mx-auto" />
+                <span className="text-[9px] font-bold block uppercase tracking-wider text-[#1D1D1C]">{isArabic ? 'ضمان ممتد' : 'Boutique Certified'}</span>
+                <span className="text-[8px] block">{isArabic ? 'أصلي 100% ومفحوص' : '100% Original authenticity'}</span>
               </div>
-              <div className="flex flex-col items-center">
-                <Truck className="w-5 h-5 text-indigo-600 mb-2" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-800">
-                  {isArabic ? 'شحن مميز' : 'Premium Delivery'}
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5">
-                  {isArabic ? 'سريع وآمن' : 'Fast and tracked'}
-                </span>
+              <div className="space-y-1">
+                <Truck className="w-5 h-5 text-[#C5A880] mx-auto" />
+                <span className="text-[9px] font-bold block uppercase tracking-wider text-[#1D1D1C]">{isArabic ? 'شحن مدرع' : 'Armored Carriage'}</span>
+                <span className="text-[8px] block">{isArabic ? 'توصيل مأمن وسريع' : 'Insured door-step carriage'}</span>
               </div>
-              <div className="flex flex-col items-center">
-                <RefreshCw className="w-5 h-5 text-indigo-600 mb-2" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-800">
-                  {isArabic ? 'إرجاع سهل' : 'Easy Return'}
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5">
-                  {isArabic ? 'خلال 14 يوماً' : 'Within 14 days'}
-                </span>
+              <div className="space-y-1">
+                <RefreshCw className="w-5 h-5 text-[#C5A880] mx-auto" />
+                <span className="text-[9px] font-bold block uppercase tracking-wider text-[#1D1D1C]">{isArabic ? 'تبديل فوري' : 'Secure Returns'}</span>
+                <span className="text-[8px] block">{isArabic ? 'خلال 14 يوم مجاناً' : 'Elite exchange window'}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Detailed Tabs Panel */}
-        <div className="border-b border-indigo-50 mb-8 flex justify-center gap-8">
-          <button
-            onClick={() => setActiveTab('details')}
-            className={`pb-4 text-sm font-black tracking-wider uppercase cursor-pointer transition-all border-b-2 ${
-              activeTab === 'details'
-                ? 'border-indigo-600 text-indigo-600 font-black'
-                : 'border-transparent text-slate-400 hover:text-indigo-600'
-            }`}
-          >
-            {isArabic ? 'مواصفات القطعة' : 'Product Specs'}
-          </button>
-          <button
-            onClick={() => setActiveTab('reviews')}
-            className={`pb-4 text-sm font-black tracking-wider uppercase cursor-pointer transition-all border-b-2 flex items-center gap-1.5 ${
-              activeTab === 'reviews'
-                ? 'border-indigo-600 text-indigo-600 font-black'
-                : 'border-transparent text-slate-400 hover:text-indigo-600'
-            }`}
-          >
-            <span>{isArabic ? 'تقييمات مجتمع زيوكا' : 'ZEWKA Community Reviews'}</span>
-            <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full">
-              {displayedReviews.length}
-            </span>
-          </button>
-        </div>
+        {/* Dynamic Reviews Tabs Area */}
+        <div className="border-t border-[#EAEAE8] pt-10">
+          <div className="flex gap-6 border-b border-[#EAEAE8] mb-8 text-xs font-mono font-bold tracking-wider uppercase">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`pb-3 border-b-2 cursor-pointer transition-colors ${
+                activeTab === 'details' ? 'border-[#1D1D1C] text-[#1D1D1C]' : 'border-transparent text-[#8E8D8A]'
+              }`}
+            >
+              {isArabic ? 'المواصفات والضمان' : 'Boutique Details'}
+            </button>
+            <button
+              onClick={() => setActiveTab('reviews')}
+              className={`pb-3 border-b-2 cursor-pointer transition-colors ${
+                activeTab === 'reviews' ? 'border-[#1D1D1C] text-[#1D1D1C]' : 'border-transparent text-[#8E8D8A]'
+              }`}
+            >
+              {isArabic ? `آراء النخبة والعملاء (${displayedReviews.length})` : `Elite Customer Reviews (${displayedReviews.length})`}
+            </button>
+          </div>
 
-        <div className="max-w-3xl mx-auto mb-20" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
           <AnimatePresence mode="wait">
-            {activeTab === 'details' ? (
+            {activeTab === 'details' && (
               <motion.div
-                key="details-tab"
+                key="tab-details"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-8"
+                className="grid grid-cols-1 md:grid-cols-2 gap-8 text-xs"
+                style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
-                {/* Features List */}
-                <div>
-                  <h3 className="text-base font-black text-slate-800 mb-4">
-                    {isArabic ? 'المميزات الرئيسية:' : 'Key Features:'}
-                  </h3>
-                  <ul className="space-y-3">
-                    {(isArabic ? product.featuresAr : product.features).map((feat, index) => (
-                      <li key={index} className="flex items-start gap-2.5 text-sm text-slate-600 font-medium">
-                        <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full mt-2 flex-shrink-0" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="space-y-4">
+                  <h4 className="font-extrabold text-[#1D1D1C] uppercase tracking-wider">{isArabic ? 'ضمان الأصالة والمصدر' : 'LIFETIME ORIGINALITY GUARANTEE'}</h4>
+                  <p className="text-[#6C6B67] leading-relaxed max-w-md font-medium">
+                    {isArabic
+                      ? 'جميع القطع المعروضة في بوتيك زيوكا الفاخر أصلية ومستوردة من دور التصميم العالمية مباشرة في ميلان، باريس ولندن. تخضع كل قطعة لثلاث مراحل فحص دقيقة قبل إدراجها، وتأتي مصحوبة بشهادة المنشأ ورقم تسلسلي خاص بالبوتيك مسجل للعميل.'
+                      : 'Every single artifact presented by ZEWKA Select is directly sourced from premier luxury design houses across Milan, Paris, and London. We certify full legal authenticity with structured original brand certificates and strict serial tags assigned to your portfolio.'}
+                  </p>
                 </div>
-
-                {/* Technical specs grid */}
-                <div className="border-t border-indigo-50 pt-8">
-                  <h3 className="text-base font-black text-slate-800 mb-4">
-                    {isArabic ? 'المواصفات الفنية:' : 'Technical Specifications:'}
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {Object.entries(isArabic ? product.specsAr : product.specs).map(([key, val]) => (
-                      <div key={key} className="flex items-center justify-between py-2.5 border-b border-indigo-50/50 text-sm">
-                        <span className="text-slate-400 font-bold">{key}</span>
-                        <span className="font-black text-slate-800">{val}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="space-y-4">
+                  <h4 className="font-extrabold text-[#1D1D1C] uppercase tracking-wider">{isArabic ? 'تفاصيل التغليف المميز والشحن' : 'INSURED PACKAGING & DELIVERY'}</h4>
+                  <p className="text-[#6C6B67] leading-relaxed max-w-md font-medium">
+                    {isArabic
+                      ? 'يتم تغليف القطع يدوياً في طرود بوتيك زيوكا المدرعة مع بطاقة إهداء مخصصة للعميل، لضمان وصولها بحالتها المثالية. نستخدم خطوط نقل خاصة مأمنة ومبردة بالكامل لحماية الجلود والمنسوجات الحساسة حتى وصولها لباب منزلك.'
+                      : 'We wrap all assets manually inside heavy duty customized ZEWKA wooden-reinforced secure packaging with custom hand-written elite client cards. Delivered exclusively via climate-controlled custom transport lines protecting sensitive fabric assets.'}
+                  </p>
                 </div>
               </motion.div>
-            ) : (
+            )}
+
+            {activeTab === 'reviews' && (
               <motion.div
-                key="reviews-tab"
+                key="tab-reviews"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-12"
+                className="space-y-8"
               >
-                {/* Write a review form */}
-                <div className="bg-white p-6 sm:p-8 rounded-3xl border-2 border-indigo-50 shadow-xl">
-                  <h3 className="text-base font-black text-slate-800 mb-1 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-yellow-500 animate-spin fill-yellow-500" />
-                    <span>{isArabic ? 'اكتب تقييمك ودع ذكاء زيوكا يحلله تلقائياً' : 'Write a review & ZEWKA AI will analyze it'}</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mb-5">
-                    {isArabic 
-                      ? 'بمجرد كتابة تعليقك، سيقوم الذكاء الاصطناعي باستخراج الكلمات المفتاحية وصياغة رد فوري يناسب فخامتك.' 
-                      : 'Our Gemini AI will auto-extract positive tags and compose a beautiful boutique response instantly.'}
-                  </p>
+                {/* Submit review */}
+                <div className="p-6 sm:p-8 bg-slate-50 border border-[#EAEAE8] rounded-3xl space-y-4" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-[#1D1D1C] uppercase tracking-wider">
+                      {isArabic ? 'شاركنا انطباعك وتقييمك الفاخر' : 'Share Your Boutique Impressions'}
+                    </h3>
+                    <p className="text-[11px] text-[#8E8D8A] mt-0.5">
+                      {isArabic ? 'يقوم نظام الذكاء الاصطناعي بتحليل لغتك واستخراج التقييم والرد فورياً.' : 'Our AI system analyzes your comments to extract traits and reply in real-time.'}
+                    </p>
+                  </div>
+
+                  {reviewSuccessMessage && (
+                    <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-xs font-bold rounded-2xl">
+                      {reviewSuccessMessage}
+                    </div>
+                  )}
 
                   <form onSubmit={handleSubmitReview} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[11px] font-black text-slate-800 uppercase block mb-1">
-                          {isArabic ? 'اسمك الكريم' : 'Your Noble Name'}
+                          {isArabic ? 'الاسم الكريم' : 'Your Noble Name'}
                         </label>
                         <input
                           type="text"
                           required
                           value={newReviewName}
                           onChange={(e) => setNewReviewName(e.target.value)}
-                          placeholder={isArabic ? 'مثال: أحمد العتيبي' : 'e.g. Eleanor Vance'}
-                          className="w-full px-4 py-2.5 bg-slate-100 border border-transparent rounded-xl text-xs text-slate-800 focus:bg-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+                          placeholder={isArabic ? 'الشيخ عبد الرحمن بن فهد' : 'Duke Christopher'}
+                          className="w-full px-4 py-3 bg-slate-100 border border-transparent rounded-full text-xs text-slate-800 focus:bg-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
                         />
                       </div>
                       <div>
