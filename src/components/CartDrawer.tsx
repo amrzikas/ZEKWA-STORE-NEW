@@ -196,47 +196,6 @@ export default function CartDrawer({
                         </div>
                       ))}
                     </div>
-
-                    {/* Lucky Wheel Promo Game */}
-                    {!hasSpun ? (
-                      <div className="p-4 bg-[#C5A880]/10 border border-[#C5A880]/20 rounded-2xl text-center space-y-3 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-16 h-16 bg-[#C5A880]/5 rounded-full blur-xl pointer-events-none" />
-                        <div className="flex justify-center items-center gap-1 text-[#C5A880]">
-                          <Sparkles className="w-4 h-4 animate-pulse" />
-                          <span className="text-[10px] font-bold font-mono tracking-widest uppercase">ZEWKA CHANCE WHEEL</span>
-                        </div>
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-bold text-[#1D1D1C]">
-                            {isArabic ? 'أدر عجلة الحظ واربح خصم فوري!' : 'Spin for your luxury promotion!'}
-                          </p>
-                          <p className="text-[9px] text-[#8E8D8A]">
-                            {isArabic ? 'فرصة حصرية لكل عميل لتوفير يصل لـ 40%!' : 'Every customer has a certified chance up to 40%.'}
-                          </p>
-                        </div>
-                        <button
-                          onClick={handleSpinWheel}
-                          disabled={isSpinning}
-                          className={`px-5 py-2.5 bg-[#1D1D1C] text-white hover:bg-[#C5A880] text-[10px] font-bold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer inline-flex items-center gap-1.5 ${isSpinning ? 'opacity-80 scale-95 cursor-wait' : ''}`}
-                        >
-                          <Gift className="w-3.5 h-3.5" />
-                          <span>{isSpinning ? (isArabic ? 'يجري الدوران...' : 'Spinning...') : (isArabic ? 'اضغط للعب مجاناً' : 'Play for Free')}</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-center flex items-center justify-center gap-3">
-                        <div className="w-8 h-8 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-600">
-                          <Check className="w-4 h-4" />
-                        </div>
-                        <div className="text-right flex-1" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
-                          <p className="text-xs font-bold text-emerald-800">
-                            {isArabic ? 'لقد فزت بكوبون خصم مميز!' : 'Exclusive VIP coupon added!'}
-                          </p>
-                          <p className="text-[10px] font-mono text-emerald-600">
-                            {isArabic ? `تم تطبيق الكود: ${wonCoupon}` : `Applied Coupon: ${wonCoupon}`}
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </>
                 )}
               </div>

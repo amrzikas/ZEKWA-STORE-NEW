@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Filter, 
   SlidersHorizontal, 
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Product, Category } from '../types';
 import ProductCard from './ProductCard';
-import { formatPrice } from '../utils';
+import { formatPrice, matchProductCategory, matchProductSubcategory } from '../utils';
 
 interface AllCollectionProps {
   products: Product[];
@@ -48,31 +48,17 @@ export default function AllCollection({
   currency = 'SAR'
 }: AllCollectionProps) {
   // Filters state
-  const [maxPrice, setMaxPrice] = useState<number>(350);
-  const [minRating, setMinRating] = useState<number>(0); // 0 means all
+  const [maxPrice, setMaxPrice] = useState<number>(1000000);
+  const [minRating, setMinRating] = useState<number>(0);
   const [inStockOnly, setInStockOnly] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<SortOption>('default');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState<boolean>(false);
-
-  // Helper to count items per category
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: products.length };
-    products.forEach(p => {
-      counts[p.category] = (counts[p.category] || 0) + 1;
-    });
-    return counts;
-  }, [products]);
-
-  // Handle price presets
-  const handlePricePreset = (max: number) => {
-    setMaxPrice(max);
-  };
 
   // Reset all filters
   const handleResetFilters = () => {
     onCategoryChange('all');
     if (onSubcategoryChange) onSubcategoryChange('');
-    setMaxPrice(350);
+    setMaxPrice(1000000);
     setMinRating(0);
     setInStockOnly(false);
     setSortBy('default');
@@ -83,8 +69,8 @@ export default function AllCollection({
   const hasActiveFilters = useMemo(() => {
     return (
       selectedCategory !== 'all' ||
-      !!selectedSubcategory ||
-      maxPrice < 350 ||
+      (selectedSubcategory && selectedSubcategory !== '') ||
+      maxPrice < 1000000 ||
       minRating > 0 ||
       inStockOnly ||
       searchQuery.trim().length > 0
@@ -93,44 +79,66 @@ export default function AllCollection({
 
   // Process and filter products
   const filteredAndSortedProducts = useMemo(() => {
+    console.log('🔍 Filtering products...', {
+      totalProducts: products.length,
+      selectedCategory,
+      selectedSubcategory,
+      searchQuery,
+      maxPrice,
+      minRating,
+      inStockOnly
+    });
+
     let result = [...products];
 
     // 1. Search Query Filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(prod => 
-        prod.name.toLowerCase().includes(query) ||
-        prod.nameAr.includes(query) ||
-        prod.description.toLowerCase().includes(query) ||
-        prod.descriptionAr.includes(query) ||
-        prod.categoryAr.includes(query)
-      );
+      result = result.filter(prod => {
+        const name = prod.name?.toLowerCase() || '';
+        const nameAr = prod.nameAr?.toLowerCase() || '';
+        const description = prod.description?.toLowerCase() || '';
+        const descriptionAr = prod.descriptionAr?.toLowerCase() || '';
+        const categoryAr = prod.categoryAr?.toLowerCase() || '';
+        
+        return name.includes(query) ||
+               nameAr.includes(query) ||
+               description.includes(query) ||
+               descriptionAr.includes(query) ||
+               categoryAr.includes(query);
+      });
+      console.log('📝 After search filter:', result.length);
     }
 
     // 2. Category Filter
-    if (selectedCategory !== 'all') {
-      result = result.filter(prod => prod.category === selectedCategory);
+    if (selectedCategory && selectedCategory !== 'all') {
+      result = result.filter(prod => matchProductCategory(prod, selectedCategory, categories));
+      console.log('📂 After category filter:', result.length, 'category:', selectedCategory);
     }
 
-    // 2b. Subcategory Filter
-    if (selectedCategory !== 'all' && selectedSubcategory) {
-      result = result.filter(prod => prod.subcategory === selectedSubcategory);
+    // 3. Subcategory Filter
+    if (selectedSubcategory && selectedSubcategory !== '' && selectedCategory !== 'all') {
+      result = result.filter(prod => matchProductSubcategory(prod, selectedSubcategory, selectedCategory, categories));
+      console.log('📂 After subcategory filter:', result.length, 'subcategory:', selectedSubcategory);
     }
 
-    // 3. Price Filter
+    // 4. Price Filter
     result = result.filter(prod => prod.price <= maxPrice);
+    console.log('💰 After price filter:', result.length, 'maxPrice:', maxPrice);
 
-    // 4. Rating Filter
+    // 5. Rating Filter
     if (minRating > 0) {
       result = result.filter(prod => prod.rating >= minRating);
+      console.log('⭐ After rating filter:', result.length, 'minRating:', minRating);
     }
 
-    // 5. Stock Filter
+    // 6. Stock Filter
     if (inStockOnly) {
       result = result.filter(prod => prod.stock > 0);
+      console.log('📦 After stock filter:', result.length);
     }
 
-    // 6. Sorting
+    // 7. Sorting
     switch (sortBy) {
       case 'price-asc':
         result.sort((a, b) => a.price - b.price);
@@ -146,7 +154,6 @@ export default function AllCollection({
         break;
       case 'default':
       default:
-        // Featured products first, then by rating
         result.sort((a, b) => {
           if (a.isFeatured && !b.isFeatured) return -1;
           if (!a.isFeatured && b.isFeatured) return 1;
@@ -155,8 +162,23 @@ export default function AllCollection({
         break;
     }
 
+    console.log('✅ Final filtered products:', result.length);
     return result;
   }, [products, selectedCategory, selectedSubcategory, searchQuery, maxPrice, minRating, inStockOnly, sortBy]);
+
+  // دالة مساعدة للحصول على اسم الفئة
+  const getCategoryName = (catId: string) => {
+    const cat = categories.find(c => c.id === catId);
+    return cat ? (isArabic ? cat.nameAr : cat.name) : catId;
+  };
+
+  // دالة مساعدة للحصول على اسم الفئة الفرعية
+  const getSubcategoryName = (catId: string, subId: string) => {
+    const cat = categories.find(c => c.id === catId);
+    if (!cat) return subId;
+    const sub = cat.subcategories?.find(s => s.id === subId);
+    return sub ? (isArabic ? sub.nameAr : sub.name) : subId;
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="all-collection-section">
@@ -182,7 +204,6 @@ export default function AllCollection({
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Active indicator status */}
           <span className="text-xs font-mono font-bold px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl">
             {filteredAndSortedProducts.length} {isArabic ? 'مقتنيات متطابقة' : 'matching items'}
           </span>
@@ -251,7 +272,7 @@ export default function AllCollection({
 
               {categories.map((cat) => {
                 const isActive = selectedCategory === cat.id;
-                const count = products.filter(p => p.category === cat.id).length;
+                const count = products.filter(p => matchProductCategory(p, cat.id, categories)).length;
                 return (
                   <div key={cat.id} className="space-y-1">
                     <button
@@ -260,13 +281,13 @@ export default function AllCollection({
                         if (onSubcategoryChange) onSubcategoryChange('');
                       }}
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer ${
-                        isActive && !selectedSubcategory
+                        isActive
                           ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/15'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
                       }`}
                     >
                       <span>{isArabic ? cat.nameAr : cat.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive && !selectedSubcategory ? 'bg-indigo-700/50 text-indigo-100' : 'bg-slate-100 text-slate-400'}`}>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-700/50 text-indigo-100' : 'bg-slate-100 text-slate-400'}`}>
                         {count}
                       </span>
                     </button>
@@ -274,19 +295,28 @@ export default function AllCollection({
                     {/* Subcategories nested under active main category */}
                     {isActive && cat.subcategories && cat.subcategories.length > 0 && (
                       <div className="pl-4 pr-1 py-1.5 space-y-1 bg-slate-50 rounded-xl border border-indigo-50/50 mt-1">
+                        <span className="text-[9px] font-bold text-slate-400 px-2 block">
+                          {isArabic ? 'الفئات الفرعية' : 'Subcategories'}
+                        </span>
                         {cat.subcategories.map((sub) => {
                           const isSubActive = selectedSubcategory === sub.id;
-                          const subCount = products.filter(p => p.category === cat.id && p.subcategory === sub.id).length;
+                          const subCount = products.filter(p => matchProductCategory(p, cat.id, categories) && matchProductSubcategory(p, sub.id, cat.id, categories)).length;
                           return (
                             <button
                               key={sub.id}
                               onClick={() => {
-                                if (onSubcategoryChange) onSubcategoryChange(sub.id);
+                                if (onSubcategoryChange) {
+                                  if (selectedSubcategory === sub.id) {
+                                    onSubcategoryChange('');
+                                  } else {
+                                    onSubcategoryChange(sub.id);
+                                  }
+                                }
                               }}
                               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300 cursor-pointer ${
                                 isSubActive
-                                  ? 'text-indigo-600 font-black'
-                                  : 'text-slate-500 hover:text-indigo-500 hover:bg-white'
+                                  ? 'bg-indigo-100 text-indigo-700 font-black'
+                                  : 'text-slate-500 hover:text-indigo-600 hover:bg-white/80'
                               }`}
                             >
                               <span className="flex items-center gap-1">
@@ -321,9 +351,9 @@ export default function AllCollection({
             
             <input
               type="range"
-              min="30"
-              max="350"
-              step="5"
+              min="0"
+              max="1000000"
+              step="1000"
               value={maxPrice}
               onChange={(e) => setMaxPrice(Number(e.target.value))}
               className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-4"
@@ -332,39 +362,39 @@ export default function AllCollection({
             {/* Price Presets */}
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => handlePricePreset(50)}
+                onClick={() => setMaxPrice(1000)}
                 className={`py-1.5 text-[10px] font-bold rounded-lg border text-center cursor-pointer transition-all ${
-                  maxPrice === 50
+                  maxPrice === 1000
                     ? 'border-indigo-600 bg-indigo-50 text-indigo-600 font-black'
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
               >
-                {isArabic ? `تحت ${formatPrice(50, currency, isArabic)}` : `Under ${formatPrice(50, currency, isArabic)}`}
+                {isArabic ? `تحت ${formatPrice(1000, currency, isArabic)}` : `Under ${formatPrice(1000, currency, isArabic)}`}
               </button>
               <button
-                onClick={() => handlePricePreset(100)}
+                onClick={() => setMaxPrice(10000)}
                 className={`py-1.5 text-[10px] font-bold rounded-lg border text-center cursor-pointer transition-all ${
-                  maxPrice === 100
+                  maxPrice === 10000
                     ? 'border-indigo-600 bg-indigo-50 text-indigo-600 font-black'
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
               >
-                {isArabic ? `تحت ${formatPrice(100, currency, isArabic)}` : `Under ${formatPrice(100, currency, isArabic)}`}
+                {isArabic ? `تحت ${formatPrice(10000, currency, isArabic)}` : `Under ${formatPrice(10000, currency, isArabic)}`}
               </button>
               <button
-                onClick={() => handlePricePreset(200)}
+                onClick={() => setMaxPrice(100000)}
                 className={`py-1.5 text-[10px] font-bold rounded-lg border text-center cursor-pointer transition-all ${
-                  maxPrice === 200
+                  maxPrice === 100000
                     ? 'border-indigo-600 bg-indigo-50 text-indigo-600 font-black'
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
               >
-                {isArabic ? `تحت ${formatPrice(200, currency, isArabic)}` : `Under ${formatPrice(200, currency, isArabic)}`}
+                {isArabic ? `تحت ${formatPrice(100000, currency, isArabic)}` : `Under ${formatPrice(100000, currency, isArabic)}`}
               </button>
               <button
-                onClick={() => handlePricePreset(350)}
+                onClick={() => setMaxPrice(1000000)}
                 className={`py-1.5 text-[10px] font-bold rounded-lg border text-center cursor-pointer transition-all ${
-                  maxPrice === 350
+                  maxPrice === 1000000
                     ? 'border-indigo-600 bg-indigo-50 text-indigo-600 font-black'
                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800'
                 }`}
@@ -383,7 +413,23 @@ export default function AllCollection({
               {isArabic ? 'تقييم مجتمع زيوكا' : 'ZEWKA Rating'}
             </h3>
             <div className="space-y-2">
-              {[0, 4.8, 4.6, 4.5].map((rating) => {
+              <button
+                onClick={() => setMinRating(0)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  minRating === 0 
+                    ? 'bg-indigo-50 text-indigo-600 font-black border border-indigo-200' 
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 border border-transparent'
+                }`}
+              >
+                <span className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                  minRating === 0 ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'
+                }`}>
+                  {minRating === 0 && <Check className="w-3 h-3 stroke-[3]" />}
+                </span>
+                <span>{isArabic ? 'جميع التقييمات' : 'All Ratings'}</span>
+              </button>
+              
+              {[4.8, 4.6, 4.5].map((rating) => {
                 const isActive = minRating === rating;
                 return (
                   <button
@@ -400,15 +446,11 @@ export default function AllCollection({
                     }`}>
                       {isActive && <Check className="w-3 h-3 stroke-[3]" />}
                     </span>
-                    {rating === 0 ? (
-                      <span>{isArabic ? 'جميع التقييمات' : 'All Ratings'}</span>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <span className="text-amber-500 font-mono">{rating}</span>
-                        <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                        <span>{isArabic ? 'فما فوق' : '& up'}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <span className="text-amber-500 font-mono">{rating}</span>
+                      <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                      <span>{isArabic ? 'فما فوق' : '& up'}</span>
+                    </div>
                   </button>
                 );
               })}
@@ -461,7 +503,7 @@ export default function AllCollection({
             </button>
 
             {/* Sorting Dropdown container */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ml-auto">
               <span className="text-xs text-slate-400 font-bold hidden sm:inline flex-shrink-0">
                 <ArrowUpDown className="w-3.5 h-3.5 inline-block mr-1" />
                 {isArabic ? 'ترتيب حسب:' : 'Sort By:'}
@@ -493,16 +535,29 @@ export default function AllCollection({
               {/* Category Pill */}
               {selectedCategory !== 'all' && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold border border-indigo-100">
-                  <span>{isArabic ? categories.find(c => c.id === selectedCategory)?.nameAr : categories.find(c => c.id === selectedCategory)?.name}</span>
-                  <button onClick={() => onCategoryChange('all')} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
+                  <span>{getCategoryName(selectedCategory)}</span>
+                  <button onClick={() => {
+                    onCategoryChange('all');
+                    if (onSubcategoryChange) onSubcategoryChange('');
+                  }} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
+                </span>
+              )}
+
+              {/* Subcategory Pill */}
+              {selectedSubcategory && selectedSubcategory !== '' && selectedCategory !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold border border-indigo-100">
+                  <span>{getSubcategoryName(selectedCategory, selectedSubcategory)}</span>
+                  <button onClick={() => {
+                    if (onSubcategoryChange) onSubcategoryChange('');
+                  }} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
                 </span>
               )}
 
               {/* Price Pill */}
-              {maxPrice < 350 && (
+              {maxPrice < 1000000 && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold border border-indigo-100">
                   <span>{isArabic ? `حتى ${formatPrice(maxPrice, currency, isArabic)}` : `Max ${formatPrice(maxPrice, currency, isArabic)}`}</span>
-                  <button onClick={() => setMaxPrice(350)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
+                  <button onClick={() => setMaxPrice(1000000)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="w-3 h-3" /></button>
                 </span>
               )}
 
@@ -642,7 +697,7 @@ export default function AllCollection({
                             if (onSubcategoryChange) onSubcategoryChange('');
                           }}
                           className={`px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                            isActive && !selectedSubcategory
+                            isActive
                               ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/15'
                               : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                           }`}
@@ -664,13 +719,31 @@ export default function AllCollection({
                               {isArabic ? 'الفئات الفرعية' : 'Subcategories'}
                             </span>
                             <div className="flex flex-wrap gap-1.5">
+                              <button
+                                onClick={() => {
+                                  if (onSubcategoryChange) onSubcategoryChange('');
+                                }}
+                                className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                                  !selectedSubcategory || selectedSubcategory === ''
+                                    ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/15'
+                                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                {isArabic ? 'الكل' : 'All'}
+                              </button>
                               {activeCat.subcategories.map((sub) => {
                                 const isSubActive = selectedSubcategory === sub.id;
                                 return (
                                   <button
                                     key={sub.id}
                                     onClick={() => {
-                                      if (onSubcategoryChange) onSubcategoryChange(sub.id);
+                                      if (onSubcategoryChange) {
+                                        if (selectedSubcategory === sub.id) {
+                                          onSubcategoryChange('');
+                                        } else {
+                                          onSubcategoryChange(sub.id);
+                                        }
+                                      }
                                     }}
                                     className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                                       isSubActive
@@ -699,19 +772,19 @@ export default function AllCollection({
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
                       {isArabic ? 'السعر الأقصى' : 'Max Price'}
                     </h3>
-                    <span className="text-xs font-black text-indigo-600 font-mono">${maxPrice}</span>
+                    <span className="text-xs font-black text-indigo-600 font-mono">{formatPrice(maxPrice, currency, isArabic)}</span>
                   </div>
                   <input
                     type="range"
-                    min="30"
-                    max="350"
-                    step="5"
+                    min="0"
+                    max="1000000"
+                    step="1000"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(Number(e.target.value))}
                     className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-3"
                   />
                   <div className="grid grid-cols-4 gap-1.5">
-                    {[50, 100, 200, 350].map((preset) => (
+                    {[1000, 10000, 100000, 1000000].map((preset) => (
                       <button
                         key={preset}
                         onClick={() => setMaxPrice(preset)}
@@ -721,7 +794,7 @@ export default function AllCollection({
                             : 'border-slate-200 text-slate-500'
                         }`}
                       >
-                        {preset === 350 ? (isArabic ? 'الكل' : 'All') : `$${preset}`}
+                        {preset === 1000000 ? (isArabic ? 'الكل' : 'All') : formatPrice(preset, currency, isArabic)}
                       </button>
                     ))}
                   </div>
@@ -735,7 +808,17 @@ export default function AllCollection({
                     {isArabic ? 'تقييم مجتمع زيوكا' : 'ZEWKA Rating'}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
-                    {[0, 4.8, 4.6, 4.5].map((rating) => {
+                    <button
+                      onClick={() => setMinRating(0)}
+                      className={`py-2 px-3 border rounded-xl text-xs font-bold text-center cursor-pointer transition-all flex items-center justify-center gap-1.5 ${
+                        minRating === 0
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-600 font-black'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{isArabic ? 'جميع التقييمات' : 'All Ratings'}</span>
+                    </button>
+                    {[4.8, 4.6, 4.5].map((rating) => {
                       const isActive = minRating === rating;
                       return (
                         <button
@@ -747,15 +830,9 @@ export default function AllCollection({
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          {rating === 0 ? (
-                            <span>{isArabic ? 'جميع التقييمات' : 'All Ratings'}</span>
-                          ) : (
-                            <>
-                              <span className="font-mono">{rating}</span>
-                              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                              <span>{isArabic ? 'وأعلى' : '& up'}</span>
-                            </>
-                          )}
+                          <span className="font-mono">{rating}</span>
+                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                          <span>{isArabic ? 'وأعلى' : '& up'}</span>
                         </button>
                       );
                     })}

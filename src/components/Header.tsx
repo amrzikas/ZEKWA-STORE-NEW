@@ -21,6 +21,7 @@ interface HeaderProps {
   onSignIn: () => void;
   onSignOut: () => void;
   categories: Category[];
+  currency?: string;
 }
 
 export default function Header({
@@ -40,11 +41,33 @@ export default function Header({
   user,
   onSignIn,
   onSignOut,
-  categories
+  categories,
+  currency = 'SAR'
 }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Dynamic Free shipping threshold text based on selected currency
+  const getFreeShippingText = () => {
+    if (isArabic) {
+      if (currency === 'SAR') return 'شحن مجاني للطلبات فوق 500 ر.س';
+      if (currency === 'USD') return 'شحن مجاني للطلبات فوق $150';
+      if (currency === 'AED') return 'شحن مجاني للطلبات فوق 500 د.إ';
+      if (currency === 'KWD') return 'شحن مجاني للطلبات فوق 40 د.ك';
+      if (currency === 'EGP') return 'شحن مجاني للطلبات فوق 1500 ج.م';
+      if (currency === 'EUR') return 'شحن مجاني للطلبات فوق 130 €';
+      return `شحن مجاني للطلبات فوق 500 ${currency}`;
+    } else {
+      if (currency === 'SAR') return 'Free worldwide shipping on orders over 500 SAR';
+      if (currency === 'USD') return 'Free worldwide shipping on orders over $150';
+      if (currency === 'AED') return 'Free worldwide shipping on orders over 500 AED';
+      if (currency === 'KWD') return 'Free worldwide shipping on orders over 40 KWD';
+      if (currency === 'EGP') return 'Free worldwide shipping on orders over 1500 EGP';
+      if (currency === 'EUR') return 'Free worldwide shipping on orders over 130 EUR';
+      return `Free worldwide shipping on orders over 500 ${currency}`;
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b-2 border-indigo-50 shadow-sm" id="zewka-header">
@@ -53,7 +76,7 @@ export default function Header({
         <div className="flex items-center justify-between py-1.5 border-b border-indigo-50 text-[11px] text-slate-500 font-bold tracking-wider">
           <div className="flex items-center gap-1">
             <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-            <span>{isArabic ? 'شحن مجاني للطلبات فوق $150' : 'Free worldwide shipping on orders over $150'}</span>
+            <span>{getFreeShippingText()}</span>
           </div>
           <div className="flex items-center gap-4">
             <button 

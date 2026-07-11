@@ -8,6 +8,7 @@ export interface Category {
   id: string;
   name: string;
   nameAr: string;
+  image?: string;
   subcategories?: Subcategory[];
 }
 
@@ -32,6 +33,7 @@ export interface Product {
   specsAr: Record<string, string>;
   isFeatured?: boolean;
   stock: number;
+  shippingPlanId?: string;
 }
 
 export interface CartItem {
@@ -63,7 +65,7 @@ export interface CustomerInfo {
   postalCode: string;
 }
 
-export type ShippingStatus = 'placed' | 'processing' | 'shipped' | 'delivered';
+export type ShippingStatus = 'placed' | 'processing' | 'shipped' | 'delivered' | 'rejected';
 
 export interface Order {
   id: string;

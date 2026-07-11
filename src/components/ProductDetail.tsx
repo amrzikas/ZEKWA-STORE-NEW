@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Star, ShoppingBag, ShieldCheck, Truck, RefreshCw, Send, Sparkles } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Product, Review } from '../types';
 import { formatPrice } from '../utils';
+import ProductCard from './ProductCard';
 
 interface ProductDetailProps {
   product: Product;
@@ -12,6 +13,8 @@ interface ProductDetailProps {
   isArabic: boolean;
   onAddReview: (comment: string, rating: number, userName: string) => Promise<void>;
   currency?: string;
+  allProducts: Product[];
+  onSelectProduct: (product: Product) => void;
 }
 
 export default function ProductDetail({
@@ -21,7 +24,9 @@ export default function ProductDetail({
   onAddToCart,
   isArabic,
   onAddReview,
-  currency = 'SAR'
+  currency = 'SAR',
+  allProducts = [],
+  onSelectProduct
 }: ProductDetailProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'reviews'>('details');
   const [newReviewComment, setNewReviewComment] = useState('');
@@ -73,20 +78,12 @@ export default function ProductDetail({
         </button>
 
         {/* Product Brief Stage */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start mb-16">
-          {/* Product Image Panel */}
-          <div className="lg:col-span-6 flex flex-col gap-4">
-            <div className="relative aspect-[4/5] rounded-[2rem] overflow-hidden border-2 border-slate-100 bg-white shadow-xl">
-              <img
-                src={selectedImage || product.image}
-                alt={isArabic ? product.nameAr : product.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover transition-all duration-300"
-              />
-            </div>
-            {/* Gallery thumbnails */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-16">
+          {/* Product Image Panel - Left Side */}
+          <div className="lg:col-span-6 flex flex-row gap-4">
+            {/* Thumbnails - Vertical on the LEFT side */}
             {product.images && product.images.length > 1 && (
-              <div className="flex flex-wrap gap-2.5 py-1">
+              <div className="flex flex-col gap-2.5 w-16 shrink-0">
                 {product.images.map((imgUrl, idx) => (
                   <button
                     key={idx}
@@ -97,14 +94,29 @@ export default function ProductDetail({
                         : 'border-slate-200 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <img src={imgUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img 
+                      src={imgUrl} 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer" 
+                      alt={`Product ${idx + 1}`}
+                    />
                   </button>
                 ))}
               </div>
             )}
+
+            {/* Main Image */}
+            <div className="flex-1 relative aspect-[4/5] rounded-[2rem] overflow-hidden border-2 border-slate-100 bg-white shadow-xl">
+              <img
+                src={selectedImage || product.image}
+                alt={isArabic ? product.nameAr : product.name}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-contain p-4 transition-all duration-300"
+              />
+            </div>
           </div>
 
-          {/* Product Basic Meta Context Details */}
+          {/* Product Info - Right Side */}
           <div className="lg:col-span-6 space-y-6" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
             <span className="text-xs font-bold font-mono tracking-widest text-[#C5A880] uppercase block">
               {isArabic ? product.categoryAr : product.category.toUpperCase()}
@@ -413,6 +425,47 @@ export default function ProductDetail({
             )}
           </AnimatePresence>
         </div>
+
+        {/* Products You Might Like Section */}
+        {allProducts && allProducts.length > 0 && (
+          (() => {
+            const relatedProducts = allProducts
+              .filter(p => p.id !== product.id && p.category === product.category)
+              .slice(0, 4);
+
+            const finalRelated = relatedProducts.length > 0 
+              ? relatedProducts 
+              : allProducts.filter(p => p.id !== product.id).slice(0, 4);
+
+            if (finalRelated.length === 0) return null;
+
+            return (
+              <div className="border-t border-[#EAEAE8] mt-16 pt-12" id="related-products-section">
+                <div className="text-center mb-8">
+                  <span className="text-xs font-bold font-mono tracking-widest text-[#C5A880] uppercase block mb-1">
+                    {isArabic ? 'اختيارات مميزة لك' : 'CURATED FOR YOU'}
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-[#1D1D1C] uppercase tracking-wider">
+                    {isArabic ? 'منتجات قد تعجبك' : 'Products You Might Like'}
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {finalRelated.map((prod) => (
+                    <ProductCard
+                      key={prod.id}
+                      product={prod}
+                      onSelect={onSelectProduct}
+                      onAddToCart={onAddToCart}
+                      isArabic={isArabic}
+                      isCompact={true}
+                      currency={currency}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })()
+        )}
       </div>
     </div>
   );

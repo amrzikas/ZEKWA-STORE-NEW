@@ -25,8 +25,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && 
-        (request.auth.token.email == 'AmrZikas20@gmail.com' || request.auth.token.email == 'amrzikas20@gmail.com');
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower() == 'amrzikas20@gmail.com';
     }
 
     // --- Validation Blueprints ---
@@ -47,7 +48,7 @@ service cloud.firestore {
         && data.customerInfo is map
         && data.customerInfo.fullName is string && data.customerInfo.fullName.size() <= 150
         && data.customerInfo.email is string && data.customerInfo.email.size() <= 150
-        && data.shippingStatus is string && (data.shippingStatus == 'placed' || data.shippingStatus == 'processing' || data.shippingStatus == 'shipped' || data.shippingStatus == 'delivered')
+        && data.shippingStatus is string && (data.shippingStatus == 'placed' || data.shippingStatus == 'processing' || data.shippingStatus == 'shipped' || data.shippingStatus == 'delivered' || data.shippingStatus == 'rejected')
         && data.date is string && data.date.size() <= 50
         && data.trackingNumber is string && data.trackingNumber.size() <= 100;
     }
@@ -88,7 +89,24 @@ service cloud.firestore {
         && data.status is string && (data.status == 'active' || data.status == 'inactive');
     }
 
-    // --- Match Rules ---
+    function isValidSettings(data) {
+      return data.storeName is string && data.storeName.size() <= 200
+        && data.storeNameAr is string && data.storeNameAr.size() <= 200
+        && data.tagline is string && data.tagline.size() <= 500
+        && data.taglineAr is string && data.taglineAr.size() <= 500
+        && data.currency is string && data.currency.size() <= 10
+        && data.vatPercent is number && data.vatPercent >= 0 && data.vatPercent <= 100
+        && data.supportEmail is string && data.supportEmail.size() <= 200
+        && data.supportPhone is string && data.supportPhone.size() <= 100
+        && data.heroTitle is string && data.heroTitle.size() <= 500
+        && data.heroTitleAr is string && data.heroTitleAr.size() <= 500
+        && data.heroSubtitle is string && data.heroSubtitle.size() <= 2000
+        && data.heroSubtitleAr is string && data.heroSubtitleAr.size() <= 2000
+        && data.heroBg is string && data.heroBg.size() <= 2000
+        && data.maintenanceMode is bool;
+    }
+
+    // --- MATCH RULES ---
 
     // Shopping Carts collection per user
     match /carts/{userId} {
@@ -99,22 +117,21 @@ service cloud.firestore {
 
     // Customer Orders collection
     match /orders/{orderId} {
-      // Secure list query verification (Query Enforcer)
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if (isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()))
+        || (!isSignedIn() && resource.data.userId == 'guest');
       
-      // Creating orders
-      allow create: if isVerified() 
-        && request.resource.data.userId == request.auth.uid
-        && isValidOrder(request.resource.data)
+      allow create: if (
+          (isSignedIn() && request.resource.data.userId == request.auth.uid) ||
+          (!isSignedIn() && request.resource.data.userId == 'guest')
+        )
         && isValidId(orderId);
         
-      // Orders can be updated by admin (to change shippingStatus)
-      allow update: if isAdmin() && isValidOrder(request.resource.data);
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
-    // Reviews collection (Publicly readable, but authenticated users can create)
+    // Reviews collection
     match /reviews/{reviewId} {
       allow read: if true;
       
@@ -123,7 +140,6 @@ service cloud.firestore {
         && isValidReview(request.resource.data)
         && isValidId(reviewId);
 
-      // Reviews can be modified or deleted only by their author or admin
       allow update: if isVerified()
         && (resource.data.userId == request.auth.uid || isAdmin())
         && (request.resource.data.userId == resource.data.userId)
@@ -133,32 +149,95 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    // Products collection (Publicly readable, Admin writeable)
+    // --- PRODUCTS (مع تحسينات منع التكرار) ---
     match /products/{productId} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidProduct(request.resource.data) && isValidId(productId);
+      
+      // منع إنشاء منتج بنفس المعرف إذا كان موجوداً مسبقاً
+      allow create: if isAdmin() 
+        && isValidProduct(request.resource.data) 
+        && isValidId(productId)
+        && !exists(/databases/$(database)/documents/products/$(productId));
+      
+      // منع التحديث إذا كان المعرف غير موجود (للتأكد من عدم إنشاء جديد عن طريق الخطأ)
+      allow update: if (isAdmin() 
+        && isValidProduct(request.resource.data)
+        && exists(/databases/$(database)/documents/products/$(productId)))
+        || (
+          // Customer/Guest stock level reduction during checkout
+          request.resource.data.stock is number
+          && request.resource.data.stock >= 0
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock'])
+          && request.resource.data.stock < resource.data.stock
+        );
+      
       allow delete: if isAdmin();
     }
 
-    // Categories collection (Publicly readable, Admin writeable)
+    // --- CATEGORIES (مع تحسينات منع التكرار) ---
     match /categories/{categoryId} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidId(categoryId);
+      
+      // منع إنشاء فئة بنفس المعرف إذا كانت موجودة مسبقاً
+      allow create: if isAdmin() 
+        && isValidId(categoryId)
+        && !exists(/databases/$(database)/documents/categories/$(categoryId));
+      
+      // منع التحديث إذا كانت غير موجودة
+      allow update: if isAdmin() 
+        && isValidId(categoryId)
+        && exists(/databases/$(database)/documents/categories/$(categoryId));
+      
       allow delete: if isAdmin();
     }
 
-    // Payment Gateways collection (Publicly readable, Admin writeable)
+    // Payment Gateways collection
     match /gateways/{gatewayId} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidGateway(request.resource.data) && isValidId(gatewayId);
+      
+      allow create: if isAdmin() 
+        && isValidGateway(request.resource.data) 
+        && isValidId(gatewayId)
+        && !exists(/databases/$(database)/documents/gateways/$(gatewayId));
+      
+      allow update: if isAdmin() 
+        && isValidGateway(request.resource.data) 
+        && isValidId(gatewayId)
+        && exists(/databases/$(database)/documents/gateways/$(gatewayId));
+      
       allow delete: if isAdmin();
     }
 
-    // Shipping Plans collection (Publicly readable, Admin writeable)
+    // Shipping Plans collection
     match /shippingPlans/{planId} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidShippingPlan(request.resource.data) && isValidId(planId);
+      
+      allow create: if isAdmin() 
+        && isValidShippingPlan(request.resource.data) 
+        && isValidId(planId)
+        && !exists(/databases/$(database)/documents/shippingPlans/$(planId));
+      
+      allow update: if isAdmin() 
+        && isValidShippingPlan(request.resource.data) 
+        && isValidId(planId)
+        && exists(/databases/$(database)/documents/shippingPlans/$(planId));
+      
       allow delete: if isAdmin();
+    }
+
+    // Site settings collection
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidSettings(request.resource.data) && isValidId(settingId);
+      allow delete: if false;
+    }
+
+    // --- NEW: سجل العمليات (Audit Log) لمنع التكرار ---
+    // هذه المجموعة لتسجيل محاولات الإضافة المتكررة
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
   }
 }

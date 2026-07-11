@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Edit2, Trash2, ShieldAlert, DollarSign, Truck, Package, 
   Clock, CheckCircle, CreditCard, Lock, Unlock, Settings, Eye, 
-  RefreshCw, ClipboardList, Check, X, AlertCircle, Sparkles, LogOut, Sliders
+  RefreshCw, ClipboardList, Check, X, AlertCircle, Sparkles, LogOut, Sliders, Image as ImageIcon
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { 
   collection, doc, getDocs, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy 
 } from 'firebase/firestore';
@@ -69,7 +69,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     description: '',
     descriptionAr: '',
     price: 0,
-    category: 'apparel' as Product['category'],
+    category: 'apparel' as string,
     categoryAr: 'ملابس وأزياء',
     subcategory: '',
     subcategoryAr: '',
@@ -79,14 +79,16 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     features: '',
     featuresAr: '',
     isFeatured: false,
+    shippingPlanId: '',
   });
 
-  // Dynamic Category Form States
+  // Dynamic Category Form States - مع إضافة حقل الصورة
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     id: '',
     name: '',
-    nameAr: ''
+    nameAr: '',
+    image: '' // إضافة حقل الصورة
   });
 
   // Dynamic Subcategory Form States
@@ -97,6 +99,8 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     name: '',
     nameAr: ''
   });
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingSubcategory, setEditingSubcategory] = useState<{ catId: string; subId: string } | null>(null);
 
   // New Gateway Form State
   const [showGatewayForm, setShowGatewayForm] = useState(false);
@@ -125,16 +129,90 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     status: 'active' as 'active' | 'inactive'
   });
 
+  // Site Settings Form State
+  const [settingsForm, setSettingsForm] = useState({
+    storeName: 'ZEWKA',
+    storeNameAr: 'زيوكا',
+    tagline: 'Luxury Apparel & Accessories Boutique',
+    taglineAr: 'بوتيك الملابس والإكسسوارات الفاخرة الحصرية',
+    currency: 'SAR',
+    vatPercent: 15,
+    supportEmail: 'support@zewka.com',
+    supportPhone: '+966500000000',
+    heroTitle: 'THE Pinnacle of Exclusive Apparel',
+    heroTitleAr: 'قمة الأناقة الفاخرة',
+    heroSubtitle: 'Handcrafted luxury pieces designed for the modern elite.',
+    heroSubtitleAr: 'قطع فاخرة مصنوعة يدوياً مصممة خصيصاً للنخبة العصرية.',
+    heroBg: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1600&auto=format&fit=crop',
+    heroBg2: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1600&auto=format&fit=crop',
+    heroBg3: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=1600&auto=format&fit=crop',
+    heroBg4: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1600&auto=format&fit=crop',
+    heroLayout: 'standard', // 'standard' or 'carousel'
+    maintenanceMode: false,
+    facebook: '',
+    instagram: '',
+    twitter: '',
+    tiktok: '',
+  });
+
   // Selected Order Detail
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [zoomedReceiptImage, setZoomedReceiptImage] = useState<string | null>(null);
+  const [orderFilterTab, setOrderFilterTab] = useState<'processing' | 'shipped' | 'delivered' | 'rejected'>('processing');
+
+  const isAdminEmail = (email?: string | null) => email?.trim().toLowerCase() === 'amrzikas20@gmail.com';
+
+  const requireAdminAccess = () => {
+    if (!user || !isAdminEmail(user.email)) {
+      alert(isArabic ? 'يجب تسجيل الدخول بحساب أدمن صالح لتنفيذ هذا الإجراء.' : 'You must be signed in as a valid admin account to perform this action.');
+      return false;
+    }
+    return true;
+  };
+
+  const resetCategoryForm = () => {
+    setShowCategoryForm(false);
+    setEditingCategoryId(null);
+    setCategoryForm({ id: '', name: '', nameAr: '', image: '' });
+  };
+
+  const resetSubcategoryForm = () => {
+    setShowSubcategoryForm(false);
+    setEditingSubcategory(null);
+    setSelectedParentCategoryId('');
+    setSubcategoryForm({ id: '', name: '', nameAr: '' });
+  };
+
+  const openEditCategoryForm = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setCategoryForm({ 
+      id: cat.id, 
+      name: cat.name, 
+      nameAr: cat.nameAr,
+      image: cat.image || '' 
+    });
+    setShowCategoryForm(true);
+    setShowSubcategoryForm(false);
+  };
+
+  const openEditSubcategoryForm = (catId: string, sub: Subcategory) => {
+    setEditingSubcategory({ catId, subId: sub.id });
+    setSelectedParentCategoryId(catId);
+    setSubcategoryForm({ id: sub.id, name: sub.name, nameAr: sub.nameAr });
+    setShowSubcategoryForm(true);
+    setShowCategoryForm(false);
+  };
 
   // 1. Check if user is super admin email or already verified
   useEffect(() => {
-    if (user && user.email?.toLowerCase() === 'amrzikas20@gmail.com') {
+    if (user && isAdminEmail(user.email)) {
       setIsUnlocked(true);
+      setAuthError('');
+    } else {
+      setIsUnlocked(false);
+      setAuthError(isArabic ? 'يجب تسجيل الدخول بحساب الأدمن للوصول إلى لوحة الإدارة.' : 'Admin access requires a valid signed-in admin account.');
     }
-  }, [user]);
+  }, [user, isArabic]);
 
   // Try Unlocking with Passkey
   const handleVerifyPasskey = (e: React.FormEvent) => {
@@ -158,7 +236,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
       const fetchedOrders: Order[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedOrders.push(docSnap.data() as Order);
+        fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order);
       });
       // Sort orders by date descending
       fetchedOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -172,7 +250,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
       const fetchedProds: Product[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedProds.push(docSnap.data() as Product);
+        fetchedProds.push({ id: docSnap.id, ...docSnap.data() } as Product);
       });
       setProducts(fetchedProds);
     }, (err) => {
@@ -184,7 +262,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     const unsubscribeGateways = onSnapshot(gatewaysQuery, (snapshot) => {
       const fetchedGateways: PaymentGateway[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedGateways.push(docSnap.data() as PaymentGateway);
+        fetchedGateways.push({ id: docSnap.id, ...docSnap.data() } as PaymentGateway);
       });
       setGateways(fetchedGateways);
     }, (err) => {
@@ -196,7 +274,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     const unsubscribeShipping = onSnapshot(shippingQuery, (snapshot) => {
       const fetchedPlans: ShippingPlan[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedPlans.push(docSnap.data() as ShippingPlan);
+        fetchedPlans.push({ id: docSnap.id, ...docSnap.data() } as ShippingPlan);
       });
       setShippingPlans(fetchedPlans);
     }, (err) => {
@@ -208,11 +286,21 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     const unsubscribeCategories = onSnapshot(categoriesQuery, (snapshot) => {
       const fetchedCategories: Category[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedCategories.push(docSnap.data() as Category);
+        fetchedCategories.push({ id: docSnap.id, ...docSnap.data() } as Category);
       });
       setCategories(fetchedCategories);
     }, (err) => {
       console.error("Failed to load categories: ", err);
+    });
+
+    // Settings Subscription
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'store'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setSettingsForm(prev => ({ ...prev, ...data }));
+      }
+    }, (err) => {
+      console.error("Failed to load settings: ", err);
     });
 
     setLoading(false);
@@ -223,12 +311,27 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       unsubscribeGateways();
       unsubscribeShipping();
       unsubscribeCategories();
+      unsubscribeSettings();
     };
   }, [isUnlocked]);
+
+  // Handle Site Settings Submit
+  const handleSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requireAdminAccess()) return;
+    try {
+      await setDoc(doc(db, 'settings', 'store'), settingsForm);
+      alert(isArabic ? 'تم حفظ إعدادات الموقع سحابياً بنجاح!' : 'Site settings saved successfully on the cloud!');
+    } catch (error) {
+      console.error("Error saving site settings: ", error);
+      alert(isArabic ? 'فشل في حفظ إعدادات الموقع.' : 'Failed to save site settings.');
+    }
+  };
 
   // Add / Edit Product
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAdminAccess()) return;
     if (!productForm.name || !productForm.nameAr || productForm.price <= 0) {
       alert('Please fill all required fields');
       return;
@@ -253,7 +356,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       description: productForm.description,
       descriptionAr: productForm.descriptionAr,
       price: Number(productForm.price),
-      category: productForm.category,
+      category: productForm.category as Product['category'],
       categoryAr: categoryNameAr,
       subcategory: productForm.subcategory || undefined,
       subcategoryAr: subcategoryNameAr || undefined,
@@ -266,7 +369,8 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       specs: editingProduct ? editingProduct.specs : {},
       specsAr: editingProduct ? editingProduct.specsAr : {},
       stock: Number(productForm.stock),
-      isFeatured: !!productForm.isFeatured
+      isFeatured: !!productForm.isFeatured,
+      shippingPlanId: productForm.shippingPlanId || undefined
     };
 
     try {
@@ -297,6 +401,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       features: '',
       featuresAr: '',
       isFeatured: false,
+      shippingPlanId: '',
     });
   };
 
@@ -328,11 +433,13 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       features: prod.features ? prod.features.join('\n') : '',
       featuresAr: prod.featuresAr ? prod.featuresAr.join('\n') : '',
       isFeatured: !!prod.isFeatured,
+      shippingPlanId: prod.shippingPlanId || '',
     });
     setShowProductModal(true);
   };
 
   const handleDeleteProduct = async (id: string) => {
+    if (!requireAdminAccess()) return;
     if (!confirm(isArabic ? 'هل أنت متأكد من حذف هذا المنتج نهائياً؟' : 'Are you sure you want to permanently delete this product?')) return;
     try {
       await deleteDoc(doc(db, 'products', id));
@@ -341,39 +448,48 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     }
   };
 
-  // Add Category Submit
+  // Add Category Submit - مع حفظ الصورة
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!categoryForm.id || !categoryForm.name || !categoryForm.nameAr) {
+    if (!requireAdminAccess()) return;
+    if (!categoryForm.name || !categoryForm.nameAr) {
       alert(isArabic ? 'الرجاء ملء جميع الحقول المطلوبة للفئة' : 'Please fill all required fields for the category');
       return;
     }
 
+    const categoryId = editingCategoryId || categoryForm.id.trim().toLowerCase();
+    if (!categoryId) {
+      alert(isArabic ? 'الرجاء إدخال معرف فئة صحيح' : 'Please enter a valid category ID');
+      return;
+    }
+
+    const existingCategory = categories.find((cat) => cat.id === editingCategoryId);
     const newCategory: Category = {
-      id: categoryForm.id.trim().toLowerCase(),
+      id: categoryId,
       name: categoryForm.name.trim(),
       nameAr: categoryForm.nameAr.trim(),
-      subcategories: []
+      image: categoryForm.image.trim() || undefined,
+      subcategories: existingCategory?.subcategories || []
     };
 
     try {
-      await setDoc(doc(db, 'categories', newCategory.id), newCategory);
-      setShowCategoryForm(false);
-      setCategoryForm({ id: '', name: '', nameAr: '' });
+      await setDoc(doc(db, 'categories', categoryId), newCategory);
+      resetCategoryForm();
     } catch (error) {
-      console.error("Error creating category: ", error);
-      alert(isArabic ? 'فشل إضافة الفئة' : 'Failed to add category');
+      console.error("Error saving category: ", error);
+      alert(isArabic ? 'فشل حفظ الفئة' : 'Failed to save category');
     }
   };
 
   // Add Subcategory Submit
   const handleSubcategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAdminAccess()) return;
     if (!selectedParentCategoryId) {
       alert(isArabic ? 'الرجاء اختيار الفئة الرئيسية أولاً' : 'Please select the parent category first');
       return;
     }
-    if (!subcategoryForm.id || !subcategoryForm.name || !subcategoryForm.nameAr) {
+    if (!subcategoryForm.name || !subcategoryForm.nameAr) {
       alert(isArabic ? 'الرجاء ملء جميع الحقول الفرعية' : 'Please fill all subcategory fields');
       return;
     }
@@ -381,36 +497,48 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     const parentCat = categories.find(c => c.id === selectedParentCategoryId);
     if (!parentCat) return;
 
+    const subcategoryId = editingSubcategory?.subId || subcategoryForm.id.trim().toLowerCase();
+    if (!subcategoryId) {
+      alert(isArabic ? 'الرجاء إدخال معرف فئة فرعية صحيح' : 'Please enter a valid subcategory ID');
+      return;
+    }
+
     const newSub: Subcategory = {
-      id: subcategoryForm.id.trim().toLowerCase(),
+      id: subcategoryId,
       name: subcategoryForm.name.trim(),
       nameAr: subcategoryForm.nameAr.trim()
     };
 
     const currentSubs = parentCat.subcategories || [];
-    // Prevent duplicate subcategory IDs
-    if (currentSubs.some(s => s.id === newSub.id)) {
+    const isEditingExisting = Boolean(editingSubcategory);
+    const updatedSubs = isEditingExisting
+      ? currentSubs.map((sub) => sub.id === editingSubcategory?.subId ? newSub : sub)
+      : currentSubs.some((sub) => sub.id === subcategoryId)
+        ? currentSubs
+        : [...currentSubs, newSub];
+
+    if (!isEditingExisting && currentSubs.some((sub) => sub.id === subcategoryId)) {
       alert(isArabic ? 'هذه الفئة الفرعية موجودة بالفعل!' : 'This subcategory already exists!');
       return;
     }
 
     const updatedCategory: Category = {
       ...parentCat,
-      subcategories: [...currentSubs, newSub]
+      subcategories: updatedSubs
     };
 
     try {
       await setDoc(doc(db, 'categories', selectedParentCategoryId), updatedCategory);
-      setShowSubcategoryForm(false);
-      setSubcategoryForm({ id: '', name: '', nameAr: '' });
+      resetSubcategoryForm();
     } catch (error) {
-      console.error("Error creating subcategory: ", error);
-      alert(isArabic ? 'فشل إضافة الفئة الفرعية' : 'Failed to add subcategory');
+      console.error("Error saving subcategory: ", error);
+      alert(isArabic ? 'فشل حفظ الفئة الفرعية' : 'Failed to save subcategory');
     }
   };
 
   // Delete Category
   const handleDeleteCategory = async (catId: string) => {
+    if (!requireAdminAccess()) return;
     if (!confirm(isArabic ? 'هل أنت متأكد من حذف هذه الفئة بالكامل؟' : 'Are you sure you want to delete this category?')) return;
     try {
       await deleteDoc(doc(db, 'categories', catId));
@@ -421,6 +549,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
 
   // Delete Subcategory
   const handleDeleteSubcategory = async (catId: string, subId: string) => {
+    if (!requireAdminAccess()) return;
     if (!confirm(isArabic ? 'هل أنت متأكد من حذف هذه الفئة الفرعية؟' : 'Are you sure you want to delete this subcategory?')) return;
     const cat = categories.find(c => c.id === catId);
     if (!cat) return;
@@ -454,11 +583,22 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
   // Update Order Payment Status
   const handleUpdateOrderPaymentStatus = async (orderId: string, nextPaymentStatus: 'verified' | 'rejected' | 'pending_verification') => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), {
+      const updates: any = {
         paymentStatus: nextPaymentStatus
-      });
+      };
+      if (nextPaymentStatus === 'rejected') {
+        updates.shippingStatus = 'rejected';
+      }
+      await updateDoc(doc(db, 'orders', orderId), updates);
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(prev => prev ? { ...prev, paymentStatus: nextPaymentStatus } : null);
+        setSelectedOrder(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, paymentStatus: nextPaymentStatus };
+          if (nextPaymentStatus === 'rejected') {
+            updated.shippingStatus = 'rejected';
+          }
+          return updated;
+        });
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
@@ -657,7 +797,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-indigo-50/20">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-indigo-600 text-white rounded-xl">
-              <Settings className="w-5 h-5 animate-spin-slow" />
+              <Settings className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-black text-slate-800">
@@ -827,7 +967,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                   {products.length === 0 ? (
                     <div className="border-2 border-dashed border-slate-100 rounded-3xl p-12 text-center">
                       <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                      <p className="text-xs font-black text-slate-400">{isArabic ? 'كتالوج المنتجات فارغ حالياً في السحابة. سيتم عرض المنتجات المحملة مسبقاً في واجهة العميل.' : 'No cloud products found. Initial defaults will seed on first load!'}</p>
+                      <p className="text-xs font-black text-slate-400">{isArabic ? 'كتالوج المنتجات فارغ حالياً في السحابة. أضف المنتجات من خلال Firestore أو من لوحة الإدارة.' : 'No cloud products found. Add products from Firestore or the admin panel.'}</p>
                     </div>
                   ) : (
                     <div className="bg-white border-2 border-slate-50 rounded-2xl overflow-hidden shadow-sm">
@@ -896,299 +1036,401 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
               )}
 
               {/* ==================== ORDERS TAB ==================== */}
-              {activeTab === 'orders' && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-800">{isArabic ? 'متابعة وتحديث طلبات العملاء السحابية' : 'Real-time Customer Orders Tracker'}</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{isArabic ? 'التحكم في تحديث حالات شحن وتوصيل الطلبات للعملاء مباشرة.' : 'Review customer shipping details, order price totals, and change shipping status.'}</p>
-                  </div>
+              {activeTab === 'orders' && (() => {
+                const processingCount = orders.filter(o => o.shippingStatus === 'placed' || o.shippingStatus === 'processing').length;
+                const shippedCount = orders.filter(o => o.shippingStatus === 'shipped').length;
+                const deliveredCount = orders.filter(o => o.shippingStatus === 'delivered').length;
+                const rejectedCount = orders.filter(o => o.shippingStatus === 'rejected').length;
 
-                  {orders.length === 0 ? (
-                    <div className="border-2 border-dashed border-slate-100 rounded-3xl p-12 text-center">
-                      <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                      <p className="text-xs font-black text-slate-400">{isArabic ? 'لا توجد طلبات عملاء مسجلة في الفايرستور حالياً.' : 'No orders in the database yet. Place some checkout orders to test!'}</p>
+                const filteredOrders = orders.filter((order) => {
+                  if (orderFilterTab === 'processing') return order.shippingStatus === 'placed' || order.shippingStatus === 'processing';
+                  if (orderFilterTab === 'shipped') return order.shippingStatus === 'shipped';
+                  if (orderFilterTab === 'delivered') return order.shippingStatus === 'delivered';
+                  if (orderFilterTab === 'rejected') return order.shippingStatus === 'rejected';
+                  return true;
+                });
+
+                return (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800">{isArabic ? 'متابعة وتحديث طلبات العملاء السحابية' : 'Real-time Customer Orders Tracker'}</h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{isArabic ? 'التحكم في تحديث حالات شحن وتوصيل الطلبات للعملاء مباشرة.' : 'Review customer shipping details, order price totals, and change shipping status.'}</p>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* Orders List Table */}
-                      <div className="bg-white border-2 border-slate-50 rounded-2xl overflow-hidden shadow-sm lg:col-span-2">
-                        <table className="w-full text-xs text-slate-600" style={{ textAlign: isArabic ? 'right' : 'left' }}>
-                          <thead className="bg-slate-50 font-black text-slate-500 uppercase tracking-wider">
-                            <tr>
-                              <th className="px-4 py-3">{isArabic ? 'رقم الطلب' : 'Order ID'}</th>
-                              <th className="px-4 py-3">{isArabic ? 'العميل' : 'Customer'}</th>
-                              <th className="px-4 py-3 text-center">{isArabic ? 'التاريخ' : 'Date'}</th>
-                              <th className="px-4 py-3 text-center">{isArabic ? 'الإجمالي' : 'Total'}</th>
-                              <th className="px-4 py-3 text-center">{isArabic ? 'الدفع' : 'Payment'}</th>
-                              <th className="px-4 py-3 text-center">{isArabic ? 'الحالة' : 'Status'}</th>
-                              <th className="px-4 py-3 text-center">{isArabic ? 'معاينة' : 'View'}</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 font-bold">
-                            {orders.map((order) => (
-                              <tr 
-                                key={order.id} 
-                                className={`hover:bg-slate-50/50 transition cursor-pointer ${selectedOrder?.id === order.id ? 'bg-indigo-50/30' : ''}`}
-                                onClick={() => setSelectedOrder(order)}
-                              >
-                                <td className="px-4 py-3">
-                                  <span className="font-mono text-[10px] text-slate-500 block truncate max-w-[80px]">
-                                    {order.id}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <p className="font-black text-slate-800">{order.customerInfo?.fullName || 'Guest'}</p>
-                                  <p className="text-[10px] text-slate-400">{order.customerInfo?.phone}</p>
-                                </td>
-                                <td className="px-4 py-3 text-center text-slate-400 font-mono text-[10px]">
-                                  {order.date}
-                                </td>
-                                <td className="px-4 py-3 text-center font-black text-indigo-600">
-                                  {order.total} {isArabic ? 'ر.س' : 'SAR'}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <div className="flex flex-col items-center">
-                                    <span className="text-[10px] text-slate-700 block max-w-[100px] truncate">
-                                      {order.paymentGatewayName || (isArabic ? 'بطاقة ائتمانية' : 'Credit Card')}
-                                    </span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase mt-1 inline-block ${
-                                      order.paymentStatus === 'verified' ? 'bg-emerald-50 text-emerald-600' :
-                                      order.paymentStatus === 'rejected' ? 'bg-red-50 text-red-500' :
-                                      'bg-amber-50 text-amber-600'
-                                    }`}>
-                                      {order.paymentStatus === 'verified' ? (isArabic ? 'مقبول' : 'Verified') :
-                                       order.paymentStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
-                                       (isArabic ? 'قيد المراجعة' : 'Pending')}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className={`px-2 py-0.5 rounded-lg text-[10px] inline-block font-black uppercase ${
-                                    order.shippingStatus === 'delivered' ? 'bg-emerald-50 text-emerald-600' :
-                                    order.shippingStatus === 'shipped' ? 'bg-blue-50 text-blue-600' :
-                                    order.shippingStatus === 'processing' ? 'bg-amber-50 text-amber-600' :
-                                    'bg-purple-50 text-purple-600'
-                                  }`}>
-                                    {order.shippingStatus === 'delivered' ? (isArabic ? 'تم التوصيل' : 'Delivered') :
-                                     order.shippingStatus === 'shipped' ? (isArabic ? 'تم الشحن' : 'Shipped') :
-                                     order.shippingStatus === 'processing' ? (isArabic ? 'قيد المعالجة' : 'Processing') :
-                                     (isArabic ? 'تم الاستلام' : 'Placed')}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <button 
-                                    className="p-1 hover:bg-indigo-50 rounded text-indigo-600"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedOrder(order);
-                                    }}
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+
+                    {orders.length === 0 ? (
+                      <div className="border-2 border-dashed border-slate-100 rounded-3xl p-12 text-center">
+                        <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                        <p className="text-xs font-black text-slate-400">{isArabic ? 'لا توجد طلبات عملاء مسجلة في الفايرستور حالياً.' : 'No orders in the database yet. Place some checkout orders to test!'}</p>
                       </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Sub-tabs bar */}
+                        <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-100" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                          <button
+                            onClick={() => setOrderFilterTab('processing')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                              orderFilterTab === 'processing'
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>{isArabic ? 'قيد المعالجة' : 'Processing'}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                              orderFilterTab === 'processing' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              {processingCount}
+                            </span>
+                          </button>
 
-                      {/* Selected Order Detail Sidebar */}
-                      <div className="bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 space-y-4">
-                        {selectedOrder ? (
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-200/60">
-                              <div>
-                                <span className="text-[10px] font-black text-slate-400 font-mono uppercase tracking-widest">{isArabic ? 'تفاصيل الطلب' : 'ORDER DETAILS'}</span>
-                                <h4 className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedOrder.id}</h4>
+                          <button
+                            onClick={() => setOrderFilterTab('shipped')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                              orderFilterTab === 'shipped'
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>{isArabic ? 'تم الشحن' : 'Shipped'}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                              orderFilterTab === 'shipped' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              {shippedCount}
+                            </span>
+                          </button>
+
+                          <button
+                            onClick={() => setOrderFilterTab('delivered')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                              orderFilterTab === 'delivered'
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>{isArabic ? 'تم توصيله' : 'Delivered'}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                              orderFilterTab === 'delivered' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              {deliveredCount}
+                            </span>
+                          </button>
+
+                          <button
+                            onClick={() => setOrderFilterTab('rejected')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                              orderFilterTab === 'rejected'
+                                ? 'bg-red-600 text-white shadow-md shadow-red-600/10'
+                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span>{isArabic ? 'مرفوض' : 'Rejected'}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                              orderFilterTab === 'rejected' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
+                            }`}>
+                              {rejectedCount}
+                            </span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          {/* Orders List Table */}
+                          <div className="bg-white border-2 border-slate-50 rounded-2xl overflow-hidden shadow-sm lg:col-span-2">
+                            {filteredOrders.length === 0 ? (
+                              <div className="p-12 text-center text-slate-400">
+                                <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-xs font-black">{isArabic ? 'لا توجد طلبات في هذا القسم حالياً.' : 'No orders in this category yet.'}</p>
                               </div>
-                              <span className="text-[10px] font-bold text-slate-400">{selectedOrder.date}</span>
-                            </div>
+                            ) : (
+                              <table className="w-full text-xs text-slate-600" style={{ textAlign: isArabic ? 'right' : 'left' }}>
+                                <thead className="bg-slate-50 font-black text-slate-500 uppercase tracking-wider">
+                                  <tr>
+                                    <th className="px-4 py-3">{isArabic ? 'رقم الطلب' : 'Order ID'}</th>
+                                    <th className="px-4 py-3">{isArabic ? 'العميل' : 'Customer'}</th>
+                                    <th className="px-4 py-3 text-center">{isArabic ? 'التاريخ' : 'Date'}</th>
+                                    <th className="px-4 py-3 text-center">{isArabic ? 'الإجمالي' : 'Total'}</th>
+                                    <th className="px-4 py-3 text-center">{isArabic ? 'الدفع' : 'Payment'}</th>
+                                    <th className="px-4 py-3 text-center">{isArabic ? 'الحالة' : 'Status'}</th>
+                                    <th className="px-4 py-3 text-center">{isArabic ? 'معاينة' : 'View'}</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 font-bold">
+                                  {filteredOrders.map((order) => (
+                                    <tr 
+                                      key={order.id} 
+                                      className={`hover:bg-slate-50/50 transition cursor-pointer ${selectedOrder?.id === order.id ? 'bg-indigo-50/30' : ''}`}
+                                      onClick={() => setSelectedOrder(order)}
+                                    >
+                                      <td className="px-4 py-3">
+                                        <span className="font-mono text-[10px] text-slate-500 block truncate max-w-[80px]">
+                                          {order.id}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <p className="font-black text-slate-800">{order.customerInfo?.fullName || 'Guest'}</p>
+                                        <p className="text-[10px] text-slate-400">{order.customerInfo?.phone}</p>
+                                      </td>
+                                      <td className="px-4 py-3 text-center text-slate-400 font-mono text-[10px]">
+                                        {order.date}
+                                      </td>
+                                      <td className="px-4 py-3 text-center font-black text-indigo-600">
+                                        {order.total} {isArabic ? 'ر.س' : 'SAR'}
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <div className="flex flex-col items-center">
+                                          <span className="text-[10px] text-slate-700 block max-w-[100px] truncate">
+                                            {order.paymentGatewayName || (isArabic ? 'بطاقة ائتمانية' : 'Credit Card')}
+                                          </span>
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase mt-1 inline-block ${
+                                            order.paymentStatus === 'verified' ? 'bg-emerald-50 text-emerald-600' :
+                                            order.paymentStatus === 'rejected' ? 'bg-red-50 text-red-500' :
+                                            'bg-amber-50 text-amber-600'
+                                          }`}>
+                                            {order.paymentStatus === 'verified' ? (isArabic ? 'مقبول' : 'Verified') :
+                                             order.paymentStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
+                                             (isArabic ? 'قيد المراجعة' : 'Pending')}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={`px-2 py-0.5 rounded-lg text-[10px] inline-block font-black uppercase ${
+                                          order.shippingStatus === 'delivered' ? 'bg-emerald-50 text-emerald-600' :
+                                          order.shippingStatus === 'shipped' ? 'bg-blue-50 text-blue-600' :
+                                          order.shippingStatus === 'processing' ? 'bg-amber-50 text-amber-600' :
+                                          order.shippingStatus === 'rejected' ? 'bg-red-50 text-red-500' :
+                                          'bg-purple-50 text-purple-600'
+                                        }`}>
+                                          {order.shippingStatus === 'delivered' ? (isArabic ? 'تم التوصيل' : 'Delivered') :
+                                           order.shippingStatus === 'shipped' ? (isArabic ? 'تم الشحن' : 'Shipped') :
+                                           order.shippingStatus === 'processing' ? (isArabic ? 'قيد المعالجة' : 'Processing') :
+                                           order.shippingStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
+                                           (isArabic ? 'تم الاستلام' : 'Placed')}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <button 
+                                          className="p-1 hover:bg-indigo-50 rounded text-indigo-600"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedOrder(order);
+                                          }}
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
 
-                            {/* Customer Profile */}
-                            <div className="space-y-1.5 text-xs">
-                              <h5 className="font-black text-slate-700">{isArabic ? 'بيانات الشحن والتوصيل' : 'Customer & Shipping Info'}</h5>
-                              <div className="p-3 bg-white border border-slate-200/50 rounded-xl space-y-1 font-bold text-[11px] text-slate-600">
-                                <p className="text-slate-800 font-black">{selectedOrder.customerInfo?.fullName}</p>
-                                <p>{selectedOrder.customerInfo?.email}</p>
-                                <p>{selectedOrder.customerInfo?.phone}</p>
-                                <p className="text-slate-500 pt-1 border-t border-slate-100 mt-1">
-                                  {selectedOrder.customerInfo?.address}, {selectedOrder.customerInfo?.city}, {selectedOrder.customerInfo?.postalCode}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Items Purchased */}
-                            <div className="space-y-1.5">
-                              <h5 className="text-xs font-black text-slate-700">{isArabic ? 'المنتجات المطلوبة' : 'Items'}</h5>
-                              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                                {selectedOrder.items?.map((item, index) => (
-                                  <div key={index} className="flex items-center justify-between text-xs bg-white p-2 border border-slate-200/50 rounded-xl font-bold">
-                                    <span className="truncate max-w-[120px] text-slate-700">{isArabic ? item.product.nameAr : item.product.name}</span>
-                                    <span className="text-slate-400 font-mono text-[10px]">x{item.quantity}</span>
-                                    <span className="font-black text-slate-800">{item.product.price * item.quantity} {isArabic ? 'ر.س' : 'SAR'}</span>
+                          {/* Selected Order Detail Sidebar */}
+                          <div className="bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 space-y-4">
+                            {selectedOrder ? (
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200/60">
+                                  <div>
+                                    <span className="text-[10px] font-black text-slate-400 font-mono uppercase tracking-widest">{isArabic ? 'تفاصيل الطلب' : 'ORDER DETAILS'}</span>
+                                    <h4 className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedOrder.id}</h4>
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Tracking / Price summary */}
-                            <div className="p-3 bg-white border border-slate-200/50 rounded-xl text-xs space-y-1 font-bold">
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">{isArabic ? 'المجموع' : 'Subtotal'}</span>
-                                <span className="text-slate-700">{selectedOrder.subtotal} {isArabic ? 'ر.س' : 'SAR'}</span>
-                              </div>
-                              {selectedOrder.discount > 0 && (
-                                <div className="flex justify-between text-red-500">
-                                  <span>{isArabic ? 'الخصم والرمز' : 'Discount'}</span>
-                                  <span>-{selectedOrder.discount} {isArabic ? 'ر.س' : 'SAR'}</span>
-                                </div>
-                              )}
-                              <div className="flex justify-between font-black text-slate-800 pt-1.5 border-t border-slate-100 mt-1">
-                                <span>{isArabic ? 'الإجمالي النهائي' : 'Total'}</span>
-                                <span className="text-indigo-600">{selectedOrder.total} {isArabic ? 'ر.س' : 'SAR'}</span>
-                              </div>
-                            </div>
-
-                            {/* Payment details and actions */}
-                            <div className="space-y-2 pt-2 border-t border-slate-200/60 text-xs">
-                              <h5 className="font-black text-slate-700 flex items-center gap-1">
-                                <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
-                                <span>{isArabic ? 'تفاصيل الدفع والتحقق' : 'Payment & Verification'}</span>
-                              </h5>
-
-                              <div className="p-3 bg-white border border-slate-200/50 rounded-xl space-y-3 font-bold">
-                                <div className="flex justify-between items-center text-[11px]">
-                                  <span className="text-slate-400">{isArabic ? 'طريقة الدفع:' : 'Payment Method:'}</span>
-                                  <span className="text-slate-800 font-black">
-                                    {selectedOrder.paymentGatewayName || (isArabic ? 'بطاقة ائتمانية' : 'Credit Card')}
-                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-400">{selectedOrder.date}</span>
                                 </div>
 
-                                <div className="flex justify-between items-center text-[11px]">
-                                  <span className="text-slate-400">{isArabic ? 'حالة الدفع:' : 'Payment Status:'}</span>
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                                    selectedOrder.paymentStatus === 'verified' ? 'bg-emerald-50 text-emerald-600' :
-                                    selectedOrder.paymentStatus === 'rejected' ? 'bg-red-50 text-red-500' :
-                                    'bg-amber-50 text-amber-600'
-                                  }`}>
-                                    {selectedOrder.paymentStatus === 'verified' ? (isArabic ? 'مقبول / مؤكد' : 'Verified') :
-                                     selectedOrder.paymentStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
-                                     (isArabic ? 'بانتظار التحقق' : 'Pending')}
-                                  </span>
+                                {/* Customer Profile */}
+                                <div className="space-y-1.5 text-xs">
+                                  <h5 className="font-black text-slate-700">{isArabic ? 'بيانات الشحن والتوصيل' : 'Customer & Shipping Info'}</h5>
+                                  <div className="p-3 bg-white border border-slate-200/50 rounded-xl space-y-1 font-bold text-[11px] text-slate-600">
+                                    <p className="text-slate-800 font-black">{selectedOrder.customerInfo?.fullName}</p>
+                                    <p>{selectedOrder.customerInfo?.email}</p>
+                                    <p>{selectedOrder.customerInfo?.phone}</p>
+                                    <p className="text-slate-500 pt-1 border-t border-slate-100 mt-1">
+                                      {selectedOrder.customerInfo?.address}, {selectedOrder.customerInfo?.city}, {selectedOrder.customerInfo?.postalCode}
+                                    </p>
+                                  </div>
                                 </div>
 
-                                {/* Uploaded transfer receipt preview */}
-                                {selectedOrder.receiptImage && (
-                                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                                    <span className="text-[10px] text-slate-400 block font-black">{isArabic ? 'إيصال التحويل المرفق من العميل:' : 'Attached Transfer Receipt:'}</span>
-                                    <div className="relative group overflow-hidden rounded-xl border border-slate-200 max-h-36">
-                                      <img 
-                                        src={selectedOrder.receiptImage} 
-                                        alt="Payment Receipt" 
-                                        className="w-full h-auto object-cover max-h-32 hover:scale-105 transition duration-300" 
-                                      />
-                                      <button 
-                                        type="button"
-                                        onClick={() => setZoomedReceiptImage(selectedOrder.receiptImage || null)}
-                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity text-[10px] font-black gap-1 cursor-pointer"
+                                {/* Items Purchased */}
+                                <div className="space-y-1.5">
+                                  <h5 className="text-xs font-black text-slate-700">{isArabic ? 'المنتجات المطلوبة' : 'Items'}</h5>
+                                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                    {selectedOrder.items?.map((item, index) => (
+                                      <div key={index} className="flex items-center justify-between text-xs bg-white p-2 border border-slate-200/50 rounded-xl font-bold">
+                                        <span className="truncate max-w-[120px] text-slate-700">{isArabic ? item.product.nameAr : item.product.name}</span>
+                                        <span className="text-slate-400 font-mono text-[10px]">x{item.quantity}</span>
+                                        <span className="font-black text-slate-800">{item.product.price * item.quantity} {isArabic ? 'ر.س' : 'SAR'}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Tracking / Price summary */}
+                                <div className="p-3 bg-white border border-slate-200/50 rounded-xl text-xs space-y-1 font-bold">
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-400">{isArabic ? 'المجموع' : 'Subtotal'}</span>
+                                    <span className="text-slate-700">{selectedOrder.subtotal} {isArabic ? 'ر.س' : 'SAR'}</span>
+                                  </div>
+                                  {selectedOrder.discount > 0 && (
+                                    <div className="flex justify-between text-red-500">
+                                      <span>{isArabic ? 'الخصم والرمز' : 'Discount'}</span>
+                                      <span>-{selectedOrder.discount} {isArabic ? 'ر.س' : 'SAR'}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between font-black text-slate-800 pt-1.5 border-t border-slate-100 mt-1">
+                                    <span>{isArabic ? 'الإجمالي النهائي' : 'Total'}</span>
+                                    <span className="text-indigo-600">{selectedOrder.total} {isArabic ? 'ر.س' : 'SAR'}</span>
+                                  </div>
+                                </div>
+
+                                {/* Payment details and actions */}
+                                <div className="space-y-2 pt-2 border-t border-slate-200/60 text-xs">
+                                  <h5 className="font-black text-slate-700 flex items-center gap-1">
+                                    <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>{isArabic ? 'تفاصيل الدفع والتحقق' : 'Payment & Verification'}</span>
+                                  </h5>
+
+                                  <div className="p-3 bg-white border border-slate-200/50 rounded-xl space-y-3 font-bold">
+                                    <div className="flex justify-between items-center text-[11px]">
+                                      <span className="text-slate-400">{isArabic ? 'طريقة الدفع:' : 'Payment Method:'}</span>
+                                      <span className="text-slate-800 font-black">
+                                        {selectedOrder.paymentGatewayName || (isArabic ? 'بطاقة ائتمانية' : 'Credit Card')}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex justify-between items-center text-[11px]">
+                                      <span className="text-slate-400">{isArabic ? 'حالة الدفع:' : 'Payment Status:'}</span>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                        selectedOrder.paymentStatus === 'verified' ? 'bg-emerald-50 text-emerald-600' :
+                                        selectedOrder.paymentStatus === 'rejected' ? 'bg-red-50 text-red-500' :
+                                        'bg-amber-50 text-amber-600'
+                                      }`}>
+                                        {selectedOrder.paymentStatus === 'verified' ? (isArabic ? 'مقبول / مؤكد' : 'Verified') :
+                                         selectedOrder.paymentStatus === 'rejected' ? (isArabic ? 'مرفوض' : 'Rejected') :
+                                         (isArabic ? 'بانتظار التحقق' : 'Pending')}
+                                      </span>
+                                    </div>
+
+                                    {/* Uploaded transfer receipt preview */}
+                                    {selectedOrder.receiptImage && (
+                                      <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                        <span className="text-[10px] text-slate-400 block font-black">{isArabic ? 'إيصال التحويل المرفق من العميل:' : 'Attached Transfer Receipt:'}</span>
+                                        <div className="relative group overflow-hidden rounded-xl border border-slate-200 max-h-36">
+                                          <img 
+                                            src={selectedOrder.receiptImage} 
+                                            alt="Payment Receipt" 
+                                            className="w-full h-auto object-cover max-h-32 hover:scale-105 transition duration-300" 
+                                            referrerPolicy="no-referrer"
+                                          />
+                                          <button 
+                                            type="button"
+                                            onClick={() => setZoomedReceiptImage(selectedOrder.receiptImage || null)}
+                                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity text-[10px] font-black gap-1 cursor-pointer"
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                            <span>{isArabic ? 'تكبير الإيصال' : 'Zoom Receipt'}</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Payment verification actions */}
+                                    <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                      <button
+                                        onClick={() => handleUpdateOrderPaymentStatus(selectedOrder.id, 'verified')}
+                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+                                          selectedOrder.paymentStatus === 'verified'
+                                            ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/10'
+                                            : 'bg-white text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
+                                        }`}
                                       >
-                                        <Eye className="w-3.5 h-3.5" />
-                                        <span>{isArabic ? 'تكبير الإيصال' : 'Zoom Receipt'}</span>
+                                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                        <span>{isArabic ? 'الموافقة على الدفع' : 'Approve Payment'}</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleUpdateOrderPaymentStatus(selectedOrder.id, 'rejected')}
+                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+                                          selectedOrder.paymentStatus === 'rejected'
+                                            ? 'bg-red-600 text-white shadow-sm shadow-red-600/10'
+                                            : 'bg-white text-red-600 hover:bg-red-50 border border-red-200'
+                                        }`}
+                                      >
+                                        <X className="w-3.5 h-3.5 stroke-[3]" />
+                                        <span>{isArabic ? 'رفض الدفع' : 'Reject Payment'}</span>
                                       </button>
                                     </div>
                                   </div>
-                                )}
+                                </div>
 
-                                {/* Payment verification actions */}
-                                <div className="grid grid-cols-2 gap-1.5 pt-1">
-                                  <button
-                                    onClick={() => handleUpdateOrderPaymentStatus(selectedOrder.id, 'verified')}
-                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
-                                      selectedOrder.paymentStatus === 'verified'
-                                        ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/10'
-                                        : 'bg-white text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
-                                    }`}
-                                  >
-                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                    <span>{isArabic ? 'الموافقة على الدفع' : 'Approve Payment'}</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleUpdateOrderPaymentStatus(selectedOrder.id, 'rejected')}
-                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
-                                      selectedOrder.paymentStatus === 'rejected'
-                                        ? 'bg-red-600 text-white shadow-sm shadow-red-600/10'
-                                        : 'bg-white text-red-600 hover:bg-red-50 border border-red-200'
-                                    }`}
-                                  >
-                                    <X className="w-3.5 h-3.5 stroke-[3]" />
-                                    <span>{isArabic ? 'رفض الدفع' : 'Reject Payment'}</span>
-                                  </button>
+                                {/* Shipping Status Action Buttons */}
+                                <div className="space-y-2 pt-2 border-t border-slate-200/60">
+                                  <h5 className="text-xs font-black text-slate-700 flex items-center gap-1">
+                                    <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>{isArabic ? 'تحديث حالة الشحن والتوصيل' : 'Update Shipping Status'}</span>
+                                  </h5>
+
+                                  {selectedOrder.paymentStatus === 'verified' ? (
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <button
+                                        onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'processing')}
+                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
+                                          selectedOrder.shippingStatus === 'processing'
+                                            ? 'bg-amber-600 text-white'
+                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                        }`}
+                                      >
+                                        {isArabic ? 'قيد التجهيز' : 'Processing'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'shipped')}
+                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
+                                          selectedOrder.shippingStatus === 'shipped'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                        }`}
+                                      >
+                                        {isArabic ? 'تم الشحن' : 'Shipped'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'delivered')}
+                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center col-span-2 ${
+                                          selectedOrder.shippingStatus === 'delivered'
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                        }`}
+                                      >
+                                        {isArabic ? 'تم التوصيل بنجاح' : 'Mark as Delivered'}
+                                      </button>
+                                    </div>
+                                  ) : selectedOrder.shippingStatus === 'rejected' ? (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
+                                      <p className="text-[10px] text-red-700 font-black leading-relaxed">
+                                        {isArabic 
+                                          ? '❌ تم رفض هذا الطلب وإلغاؤه بنجاح.' 
+                                          : '❌ This order has been rejected and canceled.'}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                                      <p className="text-[10px] text-amber-700 font-black leading-relaxed">
+                                        {isArabic 
+                                          ? '⚠️ يرجى الموافقة أولاً على الدفع الذي قام به العميل لتتمكن من متابعة التجهيز والشحن.' 
+                                          : '⚠️ Please approve customer payment first to unlock preparation and shipping procedures.'}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            </div>
-
-                            {/* Shipping Status Action Buttons */}
-                            <div className="space-y-2 pt-2 border-t border-slate-200/60">
-                              <h5 className="text-xs font-black text-slate-700 flex items-center gap-1">
-                                <Truck className="w-3.5 h-3.5 text-indigo-600" />
-                                <span>{isArabic ? 'تحديث حالة الشحن والتوصيل' : 'Update Shipping Status'}</span>
-                              </h5>
-
-                              {selectedOrder.paymentStatus === 'verified' ? (
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  <button
-                                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'processing')}
-                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
-                                      selectedOrder.shippingStatus === 'processing'
-                                        ? 'bg-amber-600 text-white'
-                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                    }`}
-                                  >
-                                    {isArabic ? 'قيد التجهيز' : 'Processing'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'shipped')}
-                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center ${
-                                      selectedOrder.shippingStatus === 'shipped'
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                    }`}
-                                  >
-                                    {isArabic ? 'تم الشحن' : 'Shipped'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'delivered')}
-                                    className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition cursor-pointer text-center col-span-2 ${
-                                      selectedOrder.shippingStatus === 'delivered'
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                    }`}
-                                  >
-                                    {isArabic ? 'تم التوصيل بنجاح' : 'Mark as Delivered'}
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center">
-                                  <p className="text-[10px] text-amber-700 font-black leading-relaxed">
-                                    {isArabic 
-                                      ? '⚠️ يرجى الموافقة أولاً على الدفع الذي قام به العميل لتتمكن من متابعة التجهيز والشحن.' 
-                                      : '⚠️ Please approve customer payment first to unlock preparation and shipping procedures.'}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
+                            ) : (
+                              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-400">
+                                <ClipboardList className="w-8 h-8 mb-2 opacity-50" />
+                                <p className="text-xs font-black">{isArabic ? 'يرجى اختيار أحد الطلبات من الجدول لمعاينة تفاصيل الشحن والتحكم بها.' : 'Select an order from the list to view and manage its status.'}</p>
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <div className="h-64 flex flex-col items-center justify-center text-center text-slate-400">
-                            <ClipboardList className="w-8 h-8 mb-2 opacity-50" />
-                            <p className="text-xs font-black">{isArabic ? 'يرجى اختيار أحد الطلبات من الجدول لمعاينة تفاصيل الشحن والتحكم بها.' : 'Select an order from the list to view and manage its status.'}</p>
-                          </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* ==================== GATEWAYS TAB ==================== */}
               {activeTab === 'gateways' && (
@@ -1546,7 +1788,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h3 className="text-sm font-black text-slate-800">{isArabic ? 'إدارة الفئات والفرعيات' : 'Category & Subcategory Management'}</h3>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{isArabic ? 'إدارة الفئات الرئيسية والفرعيات لتنسيق هيكل عرض المنتجات وفلاتر البحث.' : 'Add or modify parent categories and subcategories for the product catalog filters.'}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{isArabic ? 'إدارة الفئات الرئيسية والفرعيات مع إمكانية إضافة صور لكل فئة.' : 'Manage parent categories and subcategories with image support for each category.'}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -1575,7 +1817,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                     </div>
                   </div>
 
-                  {/* Add Parent Category Form */}
+                  {/* Add Parent Category Form - مع حقل الصورة */}
                   {showCategoryForm && (
                     <motion.div 
                       initial={{ height: 0, opacity: 0 }}
@@ -1583,20 +1825,23 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                       className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl space-y-4"
                     >
                       <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                        <h4 className="text-xs font-black text-slate-800">{isArabic ? 'إنشاء فئة رئيسية جديدة' : 'Create New Parent Category'}</h4>
-                        <button onClick={() => setShowCategoryForm(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                        <h4 className="text-xs font-black text-slate-800">
+                          {editingCategoryId ? (isArabic ? 'تعديل الفئة الرئيسية' : 'Edit Parent Category') : (isArabic ? 'إنشاء فئة رئيسية جديدة' : 'Create New Parent Category')}
+                        </h4>
+                        <button onClick={() => resetCategoryForm()} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                       </div>
 
-                      <form onSubmit={handleCategorySubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+                      <form onSubmit={handleCategorySubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold">
                         <div>
                           <label className="block text-slate-500 mb-1">{isArabic ? 'المعرف الفريد (ID بالإنجليزية)' : 'Unique Category ID (English)'}</label>
                           <input 
                             type="text" 
                             required 
+                            disabled={Boolean(editingCategoryId)}
                             placeholder="e.g. accessories"
                             value={categoryForm.id} 
                             onChange={(e) => setCategoryForm({...categoryForm, id: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
-                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400" 
                           />
                         </div>
                         <div>
@@ -1621,11 +1866,34 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                             className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
                           />
                         </div>
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isArabic ? 'رابط صورة الفئة' : 'Category Image URL'}</label>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="https://images.unsplash.com/..."
+                              value={categoryForm.image} 
+                              onChange={(e) => setCategoryForm({...categoryForm, image: e.target.value})}
+                              className="flex-1 p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                            {categoryForm.image && (
+                              <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 shrink-0">
+                                <img 
+                                  src={categoryForm.image} 
+                                  alt="Preview" 
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">{isArabic ? 'أدخل رابط صورة تعبر عن الفئة (اختياري)' : 'Enter an image URL that represents the category (optional)'}</p>
+                        </div>
 
-                        <div className="md:col-span-3 flex justify-end gap-2 pt-2">
+                        <div className="md:col-span-2 flex justify-end gap-2 pt-2">
                           <button 
                             type="button" 
-                            onClick={() => setShowCategoryForm(false)}
+                            onClick={() => resetCategoryForm()}
                             className="px-4 py-2 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition cursor-pointer"
                           >
                             {isArabic ? 'إلغاء' : 'Cancel'}
@@ -1634,7 +1902,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                             type="submit" 
                             className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer"
                           >
-                            {isArabic ? 'إضافة الفئة الرئيسية' : 'Save Category'}
+                            {editingCategoryId ? (isArabic ? 'حفظ التعديلات' : 'Save Changes') : (isArabic ? 'إضافة الفئة الرئيسية' : 'Save Category')}
                           </button>
                         </div>
                       </form>
@@ -1649,8 +1917,10 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                       className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl space-y-4"
                     >
                       <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                        <h4 className="text-xs font-black text-slate-800">{isArabic ? 'إنشاء فئة فرعية جديدة' : 'Create New Subcategory'}</h4>
-                        <button onClick={() => setShowSubcategoryForm(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                        <h4 className="text-xs font-black text-slate-800">
+                          {editingSubcategory ? (isArabic ? 'تعديل الفئة الفرعية' : 'Edit Subcategory') : (isArabic ? 'إنشاء فئة فرعية جديدة' : 'Create New Subcategory')}
+                        </h4>
+                        <button onClick={() => resetSubcategoryForm()} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                       </div>
 
                       <form onSubmit={handleSubcategorySubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-bold">
@@ -1661,9 +1931,13 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                             onChange={(e) => setSelectedParentCategoryId(e.target.value)}
                             className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                           >
-                            {categories.map(c => (
-                              <option key={c.id} value={c.id}>{isArabic ? c.nameAr : c.name}</option>
-                            ))}
+                            {categories.length === 0 ? (
+                              <option value="">{isArabic ? 'لا توجد فئات' : 'No categories'}</option>
+                            ) : (
+                              categories.map(c => (
+                                <option key={c.id} value={c.id}>{isArabic ? c.nameAr : c.name}</option>
+                              ))
+                            )}
                           </select>
                         </div>
                         <div>
@@ -1671,10 +1945,11 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                           <input 
                             type="text" 
                             required 
+                            disabled={Boolean(editingSubcategory)}
                             placeholder="e.g. sunglasses"
                             value={subcategoryForm.id} 
                             onChange={(e) => setSubcategoryForm({...subcategoryForm, id: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
-                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400" 
                           />
                         </div>
                         <div>
@@ -1703,7 +1978,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                         <div className="md:col-span-4 flex justify-end gap-2 pt-2">
                           <button 
                             type="button" 
-                            onClick={() => setShowSubcategoryForm(false)}
+                            onClick={() => resetSubcategoryForm()}
                             className="px-4 py-2 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition cursor-pointer"
                           >
                             {isArabic ? 'إلغاء' : 'Cancel'}
@@ -1712,14 +1987,14 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                             type="submit" 
                             className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer"
                           >
-                            {isArabic ? 'إضافة الفئة الفرعية' : 'Save Subcategory'}
+                            {editingSubcategory ? (isArabic ? 'حفظ التعديلات' : 'Save Changes') : (isArabic ? 'إضافة الفئة الفرعية' : 'Save Subcategory')}
                           </button>
                         </div>
                       </form>
                     </motion.div>
                   )}
 
-                  {/* Categories Grid */}
+                  {/* Categories Grid - مع عرض الصورة */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {categories.map((cat) => (
                       <div 
@@ -1728,58 +2003,415 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                       >
                         <div>
                           <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h4 className="font-black text-sm text-slate-800">{isArabic ? cat.nameAr : cat.name}</h4>
-                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">{cat.id}</p>
-                            </div>
-                            <button
-                              onClick={() => handleDeleteCategory(cat.id)}
-                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition cursor-pointer"
-                              title={isArabic ? 'حذف الفئة الرئيسية بالكامل' : 'Delete Parent Category'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          <div className="space-y-2">
-                            <span className="text-[10px] text-slate-400 block font-bold">
-                              {isArabic ? 'الفئات الفرعية المندرجة:' : 'Nested Subcategories:'}
-                            </span>
-                            
-                            {cat.subcategories && cat.subcategories.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {cat.subcategories.map((sub) => (
-                                  <div 
-                                    key={sub.id} 
-                                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-semibold text-slate-700"
-                                  >
-                                    <span>{isArabic ? sub.nameAr : sub.name}</span>
-                                    <span className="text-[9px] font-mono text-slate-400">({sub.id})</span>
-                                    <button
-                                      onClick={() => handleDeleteSubcategory(cat.id, sub.id)}
-                                      className="text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition cursor-pointer"
-                                      title={isArabic ? 'حذف الفئة الفرعية' : 'Delete Subcategory'}
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                ))}
+                            <div className="flex items-center gap-3">
+                              {/* عرض صورة الفئة */}
+                              {cat.image ? (
+                                <img 
+                                  src={cat.image} 
+                                  alt={isArabic ? cat.nameAr : cat.name}
+                                  className="w-16 h-16 rounded-2xl object-cover border border-slate-100"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center border border-slate-100">
+                                  <ImageIcon className="w-6 h-6 text-slate-300" />
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="font-black text-sm text-slate-800">{isArabic ? cat.nameAr : cat.name}</h4>
+                                <p className="text-[10px] text-slate-400 font-mono mt-0.5">{cat.id}</p>
                               </div>
-                            ) : (
-                              <p className="text-[11px] text-slate-400 italic font-medium">{isArabic ? 'لا توجد فئات فرعية مضافة بعد.' : 'No subcategories registered.'}</p>
-                            )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => openEditCategoryForm(cat)}
+                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition cursor-pointer"
+                                title={isArabic ? 'تعديل الفئة الرئيسية' : 'Edit Parent Category'}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                                title={isArabic ? 'حذف الفئة الرئيسية بالكامل' : 'Delete Parent Category'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
+                          
+                          {cat.subcategories && cat.subcategories.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {cat.subcategories.map((sub) => (
+                                <div 
+                                  key={sub.id} 
+                                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-semibold text-slate-700"
+                                >
+                                  <span>{isArabic ? sub.nameAr : sub.name}</span>
+                                  <span className="text-[9px] font-mono text-slate-400">({sub.id})</span>
+                                  <button
+                                    onClick={() => openEditSubcategoryForm(cat.id, sub)}
+                                    className="text-slate-400 hover:text-indigo-600 rounded-full hover:bg-indigo-50 p-0.5 transition cursor-pointer"
+                                    title={isArabic ? 'تعديل الفئة الفرعية' : 'Edit Subcategory'}
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSubcategory(cat.id, sub.id)}
+                                    className="text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition cursor-pointer"
+                                    title={isArabic ? 'حذف الفئة الفرعية' : 'Delete Subcategory'}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 italic font-medium mt-2">{isArabic ? 'لا توجد فئات فرعية مضافة بعد.' : 'No subcategories registered.'}</p>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* ==================== SITE SETTINGS TAB ==================== */}
+              {activeTab === 'settings' && (
+                <div className="space-y-6 animate-fade-in">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800">{isArabic ? 'إعدادات المتجر العامة والمحتوى' : 'Site Configuration & Core Content'}</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{isArabic ? 'تخصيص الهوية والأسعار والمحتوى الترويجي المعروض على الصفحة الرئيسية مباشرة.' : 'Configure general boutique branding, tax rates, currency, and primary hero banners.'}</p>
+                  </div>
+
+                  <form onSubmit={handleSettingsSubmit} className="space-y-6 text-xs font-bold text-slate-600">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      
+                      {/* Card 1: Branding & Contact */}
+                      <div className="bg-white border-2 border-slate-50 rounded-3xl p-5 space-y-4 shadow-sm">
+                        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <Sliders className="w-4 h-4 text-indigo-600" />
+                          <h4 className="text-xs font-black text-slate-800">{isArabic ? 'الهوية الأساسية والتواصل' : 'Core Identity & Contacts'}</h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'اسم المتجر (إنجليزية)' : 'Store Name (English)'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.storeName} 
+                              onChange={(e) => setSettingsForm({...settingsForm, storeName: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'اسم المتجر (عربية)' : 'Store Name (Arabic)'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.storeNameAr} 
+                              onChange={(e) => setSettingsForm({...settingsForm, storeNameAr: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'الشعار / الوصف القصير (إنجليزية)' : 'Tagline (English)'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.tagline} 
+                              onChange={(e) => setSettingsForm({...settingsForm, tagline: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'الشعار / الوصف القصير (عربية)' : 'Tagline (Arabic)'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.taglineAr} 
+                              onChange={(e) => setSettingsForm({...settingsForm, taglineAr: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'بريد الدعم والمبيعات' : 'Support Email'}</label>
+                            <input 
+                              type="email" 
+                              required
+                              value={settingsForm.supportEmail} 
+                              onChange={(e) => setSettingsForm({...settingsForm, supportEmail: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'هاتف التواصل والواتساب' : 'Support Phone'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.supportPhone} 
+                              onChange={(e) => setSettingsForm({...settingsForm, supportPhone: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'رابط فيسبوك' : 'Facebook Link'}</label>
+                            <input 
+                              type="text" 
+                              value={settingsForm.facebook || ''} 
+                              onChange={(e) => setSettingsForm({...settingsForm, facebook: e.target.value})}
+                              placeholder="https://facebook.com/..."
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'رابط إنستغرام' : 'Instagram Link'}</label>
+                            <input 
+                              type="text" 
+                              value={settingsForm.instagram || ''} 
+                              onChange={(e) => setSettingsForm({...settingsForm, instagram: e.target.value})}
+                              placeholder="https://instagram.com/..."
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'رابط تويتر / X' : 'Twitter / X Link'}</label>
+                            <input 
+                              type="text" 
+                              value={settingsForm.twitter || ''} 
+                              onChange={(e) => setSettingsForm({...settingsForm, twitter: e.target.value})}
+                              placeholder="https://twitter.com/..."
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'رابط تيك توك' : 'TikTok Link'}</label>
+                            <input 
+                              type="text" 
+                              value={settingsForm.tiktok || ''} 
+                              onChange={(e) => setSettingsForm({...settingsForm, tiktok: e.target.value})}
+                              placeholder="https://tiktok.com/@..."
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Financials & Operations */}
+                      <div className="bg-white border-2 border-slate-50 rounded-3xl p-5 space-y-4 shadow-sm flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                            <DollarSign className="w-4 h-4 text-indigo-600" />
+                            <h4 className="text-xs font-black text-slate-800">{isArabic ? 'المالية وتراخيص النظام' : 'Finance & Store Operations'}</h4>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-slate-500 mb-1">{isArabic ? 'العملة الافتراضية' : 'Default Currency'}</label>
+                              <select 
+                                value={settingsForm.currency} 
+                                onChange={(e) => setSettingsForm({...settingsForm, currency: e.target.value})}
+                                className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none text-xs font-bold" 
+                              >
+                                <option value="SAR">SAR (ر.س)</option>
+                                <option value="USD">USD ($)</option>
+                                <option value="AED">AED (د.إ)</option>
+                                <option value="KWD">KWD (د.ك)</option>
+                                <option value="EGP">EGP (ج.م)</option>
+                                <option value="EUR">EUR (€)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-slate-500 mb-1">{isArabic ? 'نسبة ضريبة القيمة المضافة (%)' : 'VAT / Tax Rate (%)'}</label>
+                              <input 
+                                type="number" 
+                                required
+                                min="0"
+                                max="100"
+                                value={settingsForm.vatPercent} 
+                                onChange={(e) => setSettingsForm({...settingsForm, vatPercent: Number(e.target.value)})}
+                                className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card 3: Maintenance Mode */}
+                        <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-2xl flex items-center gap-3">
+                          <input 
+                            type="checkbox" 
+                            id="maintenanceModeCheckbox"
+                            checked={settingsForm.maintenanceMode} 
+                            onChange={(e) => setSettingsForm({...settingsForm, maintenanceMode: e.target.checked})}
+                            className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" 
+                          />
+                          <div>
+                            <label htmlFor="maintenanceModeCheckbox" className="text-xs text-amber-900 font-black cursor-pointer select-none">
+                              {isArabic ? 'تفعيل وضع الصيانة المؤقت' : 'Enable Maintenance Mode'}
+                            </label>
+                            <p className="text-[10px] text-amber-700/80 font-semibold mt-0.5">
+                              {isArabic 
+                                ? 'سيتم حظر عمليات الشراء وإبراز إشعار صيانة راقي في واجهة المستخدم.' 
+                                : 'Blocks checkouts and presents a bespoke luxury maintenance notice to consumers.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 4: Homepage Hero Section */}
+                      <div className="bg-white border-2 border-slate-50 rounded-3xl p-5 space-y-4 shadow-sm lg:col-span-2">
+                        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <Sparkles className="w-4 h-4 text-indigo-600" />
+                          <h4 className="text-xs font-black text-slate-800">{isArabic ? 'تخصيص الواجهة الرئيسية والبانر الإعلاني' : 'Bespoke Homepage Hero Showcase'}</h4>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'العنوان الترويجي الرئيسي (عربية)' : 'Hero Title (Arabic)'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.heroTitleAr} 
+                              onChange={(e) => setSettingsForm({...settingsForm, heroTitleAr: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none text-right font-black" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'العنوان الترويجي الرئيسي (إنجليزية)' : 'Hero Title (English)'}</label>
+                            <input 
+                              type="text" 
+                              required
+                              value={settingsForm.heroTitle} 
+                              onChange={(e) => setSettingsForm({...settingsForm, heroTitle: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-black" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'العنوان الفرعي (عربية)' : 'Hero Subtitle (Arabic)'}</label>
+                            <textarea 
+                              rows={2}
+                              required
+                              value={settingsForm.heroSubtitleAr} 
+                              onChange={(e) => setSettingsForm({...settingsForm, heroSubtitleAr: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none text-right" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'العنوان الفرعي (إنجليزية)' : 'Hero Subtitle (English)'}</label>
+                            <textarea 
+                              rows={2}
+                              required
+                              value={settingsForm.heroSubtitle} 
+                              onChange={(e) => setSettingsForm({...settingsForm, heroSubtitle: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'تصميم قسم الهيرو الرئيسي' : 'Hero Section Layout'}</label>
+                            <select 
+                              value={settingsForm.heroLayout || 'standard'} 
+                              onChange={(e) => setSettingsForm({...settingsForm, heroLayout: e.target.value})}
+                              className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none text-xs font-bold" 
+                            >
+                              <option value="standard">{isArabic ? 'تصميم قياسي بصورة واحدة ثابتة' : 'Standard Layout (Single Image)'}</option>
+                              <option value="carousel">{isArabic ? 'سلايدر متحرك بعدة صور' : 'Carousel Layout (Multiple Images Slider)'}</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isArabic ? 'رابط الصورة الأساسية (البانر الأول)' : 'Hero Background Image 1 (Primary)'}</label>
+                            <div className="flex gap-4 items-center">
+                              <input 
+                                type="text" 
+                                required
+                                value={settingsForm.heroBg} 
+                                onChange={(e) => setSettingsForm({...settingsForm, heroBg: e.target.value})}
+                                className="flex-1 p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-[10px]" 
+                              />
+                              {settingsForm.heroBg && (
+                                <div className="w-16 h-12 rounded-xl overflow-hidden border border-slate-200 shrink-0 shadow-sm relative group">
+                                  <img 
+                                    src={settingsForm.heroBg} 
+                                    alt="Hero BG Preview" 
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {settingsForm.heroLayout === 'carousel' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl"
+                            >
+                              <div className="md:col-span-3 pb-2 border-b border-slate-200/60 font-black text-[11px] text-slate-700">
+                                {isArabic ? 'الصور الإضافية للسلايدر المتحرك (اختياري)' : 'Additional Carousel Photos (Optional)'}
+                              </div>
+                              <div>
+                                <label className="block text-slate-400 mb-1 text-[10px]">{isArabic ? 'رابط الصورة الثانية' : 'Background Image 2'}</label>
+                                <input 
+                                  type="text" 
+                                  value={settingsForm.heroBg2 || ''} 
+                                  onChange={(e) => setSettingsForm({...settingsForm, heroBg2: e.target.value})}
+                                  placeholder="https://..."
+                                  className="w-full p-2 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-[9px]" 
+                                />
+                                {settingsForm.heroBg2 && (
+                                  <img src={settingsForm.heroBg2} className="w-12 h-8 object-cover rounded mt-1.5 border border-slate-200" referrerPolicy="no-referrer" />
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-slate-400 mb-1 text-[10px]">{isArabic ? 'رابط الصورة الثالثة' : 'Background Image 3'}</label>
+                                <input 
+                                  type="text" 
+                                  value={settingsForm.heroBg3 || ''} 
+                                  onChange={(e) => setSettingsForm({...settingsForm, heroBg3: e.target.value})}
+                                  placeholder="https://..."
+                                  className="w-full p-2 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-[9px]" 
+                                />
+                                {settingsForm.heroBg3 && (
+                                  <img src={settingsForm.heroBg3} className="w-12 h-8 object-cover rounded mt-1.5 border border-slate-200" referrerPolicy="no-referrer" />
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-slate-400 mb-1 text-[10px]">{isArabic ? 'رابط الصورة الرابعة' : 'Background Image 4'}</label>
+                                <input 
+                                  type="text" 
+                                  value={settingsForm.heroBg4 || ''} 
+                                  onChange={(e) => setSettingsForm({...settingsForm, heroBg4: e.target.value})}
+                                  placeholder="https://..."
+                                  className="w-full p-2 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-[9px]" 
+                                />
+                                {settingsForm.heroBg4 && (
+                                  <img src={settingsForm.heroBg4} className="w-12 h-8 object-cover rounded mt-1.5 border border-slate-200" referrerPolicy="no-referrer" />
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button 
+                        type="submit" 
+                        className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-2xl transition-all duration-300 shadow-lg shadow-indigo-600/15 cursor-pointer"
+                      >
+                        {isArabic ? 'حفظ ونشر جميع الإعدادات سحابياً' : 'Publish Site Settings Live'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
             </>
           )}
+          </div>
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
 
       {/* ==================== PRODUCT FORM MODAL ==================== */}
       {showProductModal && (
@@ -1888,9 +2520,13 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                     }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none text-xs"
                   >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{isArabic ? cat.nameAr : cat.name}</option>
-                    ))}
+                    {categories.length === 0 ? (
+                      <option value="apparel">{isArabic ? 'ملابس وأزياء' : 'Apparel'}</option>
+                    ) : (
+                      categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{isArabic ? cat.nameAr : cat.name}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div>
@@ -1903,6 +2539,21 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                     <option value="">{isArabic ? 'لا توجد فئة فرعية' : 'No subcategory'}</option>
                     {categories.find(c => c.id === productForm.category)?.subcategories?.map((sub) => (
                       <option key={sub.id} value={sub.id}>{isArabic ? sub.nameAr : sub.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">{isArabic ? 'خطة الشحن المخصصة للمنتج (اختياري)' : 'Product Shipping Plan (Optional)'}</label>
+                  <select
+                    value={productForm.shippingPlanId || ''}
+                    onChange={(e) => setProductForm({...productForm, shippingPlanId: e.target.value})}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none text-xs font-bold"
+                  >
+                    <option value="">{isArabic ? 'الخطة الافتراضية / الكل' : 'Default / All Plans'}</option>
+                    {shippingPlans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {isArabic ? `${plan.nameAr} (${plan.cost} ر.س)` : `${plan.name} (${plan.cost} SAR)`}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -2014,6 +2665,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                 src={zoomedReceiptImage}
                 alt="Zoomed Payment Receipt"
                 className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                referrerPolicy="no-referrer"
               />
             </div>
           </div>

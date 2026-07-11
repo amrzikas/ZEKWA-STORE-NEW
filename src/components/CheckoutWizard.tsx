@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, CreditCard, Lock, Sparkles, CheckCircle2, ChevronRight, ShoppingBag, Check } from 'lucide-react';
+import { ArrowLeft, CreditCard, Lock, Sparkles, CheckCircle2, ChevronRight, ShoppingBag, Check, Truck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CartItem, CustomerInfo, Order, ShippingStatus } from '../types';
 import { db } from '../lib/firebase';
@@ -70,7 +70,15 @@ export default function CheckoutWizard({
         description: 'Secure credit card payment.',
         descriptionAr: 'الدفع المباشر والآمن عبر بطاقتك الائتمانية.'
       };
-      setGateways([defaultCard, ...fetched]);
+      // Always include Cash on Delivery as a default option
+      const defaultCod = {
+        id: 'cod',
+        name: 'Cash on Delivery',
+        nameAr: 'الدفع عند الاستلام',
+        description: 'Pay cash upon receiving your order.',
+        descriptionAr: 'ادفع نقداً عند استلام طلبك.'
+      };
+      setGateways([defaultCard, defaultCod, ...fetched]);
     }).catch(err => console.error("Error fetching checkout gateways: ", err));
 
     // Fetch active shipping plans from Firestore
@@ -80,9 +88,23 @@ export default function CheckoutWizard({
         const data = d.data();
         if (data.status === 'active') fetched.push(data);
       });
-      setShippingPlans(fetched);
-      if (fetched.length > 0) {
-        setSelectedShippingPlan(fetched[0]);
+
+      // Filter or sort shipping plans based on product custom shipping plan if defined
+      const productShippingPlanIds = cart
+        .map(item => item.product?.shippingPlanId)
+        .filter(Boolean);
+
+      let finalPlans = fetched;
+      if (productShippingPlanIds.length > 0) {
+        const matchedPlans = fetched.filter(plan => productShippingPlanIds.includes(plan.id));
+        if (matchedPlans.length > 0) {
+          finalPlans = matchedPlans;
+        }
+      }
+
+      setShippingPlans(finalPlans);
+      if (finalPlans.length > 0) {
+        setSelectedShippingPlan(finalPlans[0]);
       }
     }).catch(err => console.error("Error fetching checkout shipping: ", err));
   }, []);
@@ -144,8 +166,8 @@ export default function CheckoutWizard({
   const handlePaymentSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    // Validate manual receipt if manual gateway is chosen
-    if (selectedGatewayId !== 'credit_card') {
+    // Validate manual receipt if manual gateway is chosen (excluding credit card and COD)
+    if (selectedGatewayId !== 'credit_card' && selectedGatewayId !== 'cod') {
       if (!receiptImage) {
         setReceiptError(isArabic 
           ? 'يرجى رفع صورة إثبات التحويل أولاً لإتمام الطلب.' 
@@ -183,7 +205,7 @@ export default function CheckoutWizard({
         paymentGatewayId: selectedGatewayId,
         paymentGatewayName: chosenGateway ? (isArabic ? chosenGateway.nameAr : chosenGateway.name) : 'Credit Card',
         paymentStatus: selectedGatewayId === 'credit_card' ? 'verified' : 'pending_verification',
-        receiptImage: selectedGatewayId === 'credit_card' ? '' : receiptImage
+        receiptImage: (selectedGatewayId === 'credit_card' || selectedGatewayId === 'cod') ? '' : receiptImage
       };
 
       onComplete(newOrder);
@@ -398,7 +420,43 @@ export default function CheckoutWizard({
                   )}
 
                   {selectedGatewayId !== 'credit_card' ? (
-                    <div className="p-6 bg-amber-50/40 border border-amber-100 rounded-3xl text-center space-y-4 font-sans text-xs text-slate-800">
+                    selectedGatewayId === 'cod' ? (
+                      <div className="p-6 bg-slate-50 border border-slate-100 rounded-3xl text-center space-y-4 font-sans text-xs text-slate-800 w-full">
+                        <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mx-auto text-indigo-600">
+                          <Truck className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-extrabold text-[#1D1D1C] text-sm">
+                            {isArabic ? 'الدفع عند الاستلام (COD)' : 'Cash on Delivery (COD)'}
+                          </p>
+                          <p className="text-slate-500 text-[11px]">
+                            {isArabic ? 'سداد قيمة الطلب نقداً للمندوب فور وصول الشحنة لموقعك.' : 'Pay in cash directly to the courier agent upon arrival.'}
+                          </p>
+                        </div>
+
+                        {/* Explicit Crucial Warning Requested by User */}
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] leading-relaxed max-w-sm mx-auto text-amber-900 font-bold flex items-start gap-2.5" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                          <span className="text-sm shrink-0">⚠️</span>
+                          <div className="text-right">
+                            <p className="font-black text-amber-950 mb-0.5">{isArabic ? 'تنبيه هام ومُلزم:' : 'Important Binding Notice:'}</p>
+                            <p className="font-bold text-amber-900">
+                              {isArabic 
+                                ? 'في حال رفض استلام الطلب عند التوصيل، يرجى العلم بأنه سيتم تحصيل رسوم الشحن فقط كتعويض للمندوب وتكاليف النقل.' 
+                                : 'If the order is rejected upon delivery, please note that shipping fees will still be collected to cover courier dispatch and logistics.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handlePaymentSubmit()}
+                          className="w-full py-4 bg-[#1D1D1C] hover:bg-[#C5A880] text-white text-xs font-bold uppercase tracking-widest rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 mt-2 shadow-lg"
+                        >
+                          <Truck className="w-4 h-4" />
+                          <span>{isArabic ? `تأكيد الطلب والدفع عند الاستلام` : `Confirm Order (Cash on Delivery)`}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-6 bg-amber-50/40 border border-amber-100 rounded-3xl text-center space-y-4 font-sans text-xs text-slate-800">
                       <div className="w-12 h-12 bg-[#C5A880]/10 rounded-full flex items-center justify-center mx-auto">
                         <Lock className="w-5 h-5 text-[#C5A880]" />
                       </div>
@@ -488,6 +546,7 @@ export default function CheckoutWizard({
                         <span>{isArabic ? `تأكيد الطلب بقيمة ${formatPrice(total, currency, isArabic)}` : `Confirm Order ${formatPrice(total, currency, isArabic)}`}</span>
                       </button>
                     </div>
+                    )
                   ) : (
                     <>
                       {/* Elegant Credit Card Mockup */}

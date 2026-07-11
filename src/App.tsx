@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import ProductCard from './components/ProductCard';
@@ -10,54 +10,15 @@ import AiAssistant from './components/AiAssistant';
 import OrdersHistory from './components/OrdersHistory';
 import AllCollection from './components/AllCollection';
 
-import { PRODUCTS, INITIAL_REVIEWS } from './data';
 import { CartItem, Product, Review, Order, ShippingStatus, Category } from './types';
+import { matchProductCategory } from './utils';
+import { Facebook, Instagram, Twitter } from 'lucide-react';
 
 // Firebase Imports
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import { collection, doc, getDoc, setDoc, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from './lib/firebase';
 import AdminDashboard from './components/AdminDashboard';
-
-const DEFAULT_CATEGORIES: Category[] = [
-  {
-    id: 'apparel',
-    name: 'Luxury Apparel',
-    nameAr: 'الملابس والموضة',
-    subcategories: [
-      { id: 'sweatshirts', name: 'Premium Sweatshirts', nameAr: 'سويت شيرتات راقية' },
-      { id: 'tshirts', name: 'Artisan Tees', nameAr: 'تيشرتات مميزة' },
-      { id: 'caps', name: 'Designer Caps', nameAr: 'قبعات مصممة' }
-    ]
-  },
-  {
-    id: 'wellness',
-    name: 'Aromatherapy & Wellness',
-    nameAr: 'العناية والعطور',
-    subcategories: [
-      { id: 'perfumes', name: 'Niche Perfumes', nameAr: 'عطور نادرة' },
-      { id: 'candles', name: 'Scented Candles', nameAr: 'شموع معطرة' }
-    ]
-  },
-  {
-    id: 'home',
-    name: 'Artisan Home Decor',
-    nameAr: 'المنزل العصري',
-    subcategories: [
-      { id: 'vases', name: 'Ceramic Vases', nameAr: 'مزهريات سيراميك' },
-      { id: 'cushions', name: 'Bespoke Cushions', nameAr: 'وسائد فاخرة' }
-    ]
-  },
-  {
-    id: 'tech',
-    name: 'Bespoke Tech Accents',
-    nameAr: 'إكسسوارات تقنية',
-    subcategories: [
-      { id: 'cases', name: 'Leather Cases', nameAr: 'حافظات جلدية' },
-      { id: 'stands', name: 'Wooden Stands', nameAr: 'مساند خشبية' }
-    ]
-  }
-];
 
 export default function App() {
   const [view, setView] = useState<'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin'>('home');
@@ -71,8 +32,47 @@ export default function App() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isArabic, setIsArabic] = useState(true); // Defaults to Arabic as requested by user
+  const [isArabic, setIsArabic] = useState(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Site Settings State (Synchronized in Real-time)
+  const [storeSettings, setStoreSettings] = useState({
+    storeName: 'ZEWKA',
+    storeNameAr: 'زيوكا',
+    tagline: 'Luxury Apparel & Accessories Boutique',
+    taglineAr: 'بوتيك الملابس والإكسسوارات الفاخرة الحصرية',
+    currency: 'SAR',
+    vatPercent: 15,
+    supportEmail: 'support@zewka.com',
+    supportPhone: '+966500000000',
+    heroTitle: 'THE Pinnacle of Exclusive Apparel',
+    heroTitleAr: 'قمة الأناقة الفاخرة',
+    heroSubtitle: 'Handcrafted luxury pieces designed for the modern elite.',
+    heroSubtitleAr: 'قطع فاخرة مصنوعة يدوياً مصممة خصيصاً للنخبة العصرية.',
+    heroBg: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1600&auto=format&fit=crop',
+    heroBg2: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1600&auto=format&fit=crop',
+    heroBg3: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=1600&auto=format&fit=crop',
+    heroBg4: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1600&auto=format&fit=crop',
+    heroLayout: 'standard', // 'standard' or 'carousel'
+    maintenanceMode: false,
+    facebook: '',
+    instagram: '',
+    twitter: '',
+    tiktok: '',
+  });
+
+  // Real-time Settings Listener
+  useEffect(() => {
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'store'), (docSnap) => {
+      if (docSnap.exists()) {
+        setStoreSettings(prev => ({ ...prev, ...docSnap.data() }));
+      }
+    }, (error) => {
+      console.error("Settings subscription error: ", error);
+    });
+
+    return () => unsubscribeSettings();
+  }, []);
 
   // Firebase Auth and Cart Sync States
   const [user, setUser] = useState<User | null>(null);
@@ -100,36 +100,13 @@ export default function App() {
     const reviewsColRef = collection(db, 'reviews');
     
     const unsubscribeReviews = onSnapshot(reviewsColRef, async (snapshot) => {
-      let fetchedReviews: Review[] = [];
+      const fetchedReviews: Review[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedReviews.push(docSnap.data() as Review);
+        fetchedReviews.push({ id: docSnap.id, ...docSnap.data() } as Review);
       });
-      
-      if (fetchedReviews.length === 0) {
-        // Seed initial reviews to Firestore if database is empty AND user is admin
-        if (auth.currentUser?.email?.toLowerCase() === 'amrzikas20@gmail.com') {
-          try {
-            for (const rev of INITIAL_REVIEWS) {
-              const rId = rev.id;
-              await setDoc(doc(db, 'reviews', rId), {
-                ...rev,
-                productId: PRODUCTS[0].id,
-                userId: 'seeded-system-user',
-                createdAt: new Date().toISOString()
-              });
-            }
-          } catch (error) {
-            console.error("Error seeding default reviews: ", error);
-          }
-        } else {
-          // Fallback to local INITIAL_REVIEWS
-          setReviews(INITIAL_REVIEWS);
-        }
-      } else {
-        // Sort reviews by date descending
-        fetchedReviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setReviews(fetchedReviews);
-      }
+
+      fetchedReviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setReviews(fetchedReviews);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'reviews');
     });
@@ -142,28 +119,12 @@ export default function App() {
     const productsColRef = collection(db, 'products');
     
     const unsubscribeProducts = onSnapshot(productsColRef, async (snapshot) => {
-      let fetchedProducts: Product[] = [];
+      const fetchedProducts: Product[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedProducts.push(docSnap.data() as Product);
+        fetchedProducts.push({ id: docSnap.id, ...docSnap.data() } as Product);
       });
-      
-      if (fetchedProducts.length === 0) {
-        // Seed initial products to Firestore if empty AND user is admin
-        if (auth.currentUser?.email?.toLowerCase() === 'amrzikas20@gmail.com') {
-          try {
-            for (const prod of PRODUCTS) {
-              await setDoc(doc(db, 'products', prod.id), prod);
-            }
-          } catch (error) {
-            console.error("Error seeding default products: ", error);
-          }
-        } else {
-          // Fallback to local PRODUCTS
-          setProducts(PRODUCTS);
-        }
-      } else {
-        setProducts(fetchedProducts);
-      }
+
+      setProducts(fetchedProducts);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'products');
     });
@@ -176,28 +137,12 @@ export default function App() {
     const categoriesColRef = collection(db, 'categories');
     
     const unsubscribeCategories = onSnapshot(categoriesColRef, async (snapshot) => {
-      let fetchedCategories: Category[] = [];
+      const fetchedCategories: Category[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedCategories.push(docSnap.data() as Category);
+        fetchedCategories.push({ id: docSnap.id, ...docSnap.data() } as Category);
       });
-      
-      if (fetchedCategories.length === 0) {
-        // Seed default categories to Firestore if empty AND user is admin
-        if (auth.currentUser?.email?.toLowerCase() === 'amrzikas20@gmail.com') {
-          try {
-            for (const cat of DEFAULT_CATEGORIES) {
-              await setDoc(doc(db, 'categories', cat.id), cat);
-            }
-          } catch (error) {
-            console.error("Error seeding default categories: ", error);
-          }
-        } else {
-          // Fallback to default categories
-          setCategories(DEFAULT_CATEGORIES);
-        }
-      } else {
-        setCategories(fetchedCategories);
-      }
+
+      setCategories(fetchedCategories);
     }, (error) => {
       console.error("Categories subscription error: ", error);
     });
@@ -207,8 +152,16 @@ export default function App() {
 
   // Firebase Auth and User Data/Orders Listener
   useEffect(() => {
+    let unsubscribeOrders: (() => void) | null = null;
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      // Clean up previous order subscription if exists
+      if (unsubscribeOrders) {
+        unsubscribeOrders();
+        unsubscribeOrders = null;
+      }
       
       if (currentUser) {
         setIsCartLoaded(false);
@@ -238,20 +191,16 @@ export default function App() {
             where('userId', '==', currentUser.uid)
           );
           
-          const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+          unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
             const fetchedOrders: Order[] = [];
             snapshot.forEach((docSnap) => {
-              fetchedOrders.push(docSnap.data() as Order);
+              fetchedOrders.push({ id: docSnap.id, ...docSnap.data() } as Order);
             });
             fetchedOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setOrders(fetchedOrders);
           }, (error) => {
             handleFirestoreError(error, OperationType.LIST, 'orders');
           });
-
-          return () => {
-            unsubscribeOrders();
-          };
         } catch (error) {
           console.error("Error syncing on login: ", error);
           setIsCartLoaded(true);
@@ -266,7 +215,12 @@ export default function App() {
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeOrders) {
+        unsubscribeOrders();
+      }
+    };
   }, []);
 
   // Save changes to Local Storage and Firestore Cart
@@ -328,7 +282,7 @@ export default function App() {
         setOrders(updatedOrders);
         localStorage.setItem('zewka_orders', JSON.stringify(updatedOrders));
       }
-    }, 40000); // Progress shipping state every 40 seconds
+    }, 40000);
 
     return () => clearInterval(interval);
   }, [orders, user]);
@@ -416,7 +370,6 @@ export default function App() {
       merchantResponse
     };
 
-    // Save to Firestore
     try {
       const reviewToSave = {
         ...newReview,
@@ -449,7 +402,6 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
 
-    // Save to Firestore for both logged-in users and guests
     try {
       await setDoc(doc(db, 'orders', newOrder.id), orderToSave);
     } catch (error) {
@@ -457,7 +409,6 @@ export default function App() {
     }
 
     if (user) {
-      // Empty user cart in Firestore
       try {
         await setDoc(doc(db, 'carts', user.uid), {
           userId: user.uid,
@@ -477,8 +428,8 @@ export default function App() {
   };
 
   // Filter products by search & category
-  const filteredProducts = (products.length > 0 ? products : PRODUCTS).filter(prod => {
-    const matchesCategory = selectedCategory === 'all' || prod.category === selectedCategory;
+  const filteredProducts = products.filter(prod => {
+    const matchesCategory = selectedCategory === 'all' || matchProductCategory(prod, selectedCategory, categories);
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch = !query || 
       prod.name.toLowerCase().includes(query) ||
@@ -489,6 +440,62 @@ export default function App() {
 
     return matchesCategory && matchesSearch;
   });
+
+  // دالة مساعدة للحصول على صورة الفئة
+  const getCategoryImage = (cat: Category): string => {
+    // إذا كانت الفئة تحتوي على صورة مخصصة، استخدمها
+    if (cat.image) {
+      return cat.image;
+    }
+    // وإلا ابحث عن أول منتج في الفئة
+    const catProduct = products.find(p => matchProductCategory(p, cat.id, categories));
+    if (catProduct?.image) {
+      return catProduct.image;
+    }
+    // صورة افتراضية
+    return 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=600&auto=format&fit=crop';
+  };
+
+  if (storeSettings.maintenanceMode && !(user && user.email?.trim().toLowerCase() === 'amrzikas20@gmail.com')) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white font-sans text-center relative selection:bg-indigo-500/30">
+        {/* Absolute branding background blur */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[120px]" />
+        
+        <div className="relative z-10 max-w-lg space-y-6">
+          <span className="text-3xl sm:text-4xl font-black tracking-widest text-indigo-400">
+            ZEWKA
+          </span>
+          <div className="w-12 h-0.5 bg-indigo-500 mx-auto" />
+          
+          <div className="space-y-4 pt-4">
+            <h1 className="text-xl sm:text-2xl font-black tracking-wide leading-relaxed">
+              {isArabic 
+                ? 'نعمل حالياً على تحديث مقتنياتنا الفاخرة' 
+                : 'Elevating Our Curation Collections'}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
+              {isArabic 
+                ? 'نحن نقوم الآن بإجراء بعض التحديثات الدورية لإضفاء مزيد من الرقي على مجموعاتنا وموقعنا. سنكون جاهزين لاستقبالكم وتلبية طلباتكم الراقية قريباً جداً.' 
+                : 'We are currently performing scheduled enhancements to our boutique curation. We will be back online with a brand new refined experience very soon.'}
+            </p>
+          </div>
+
+          <div className="pt-8 flex flex-col gap-3 justify-center items-center">
+            <button
+              onClick={handleSignIn}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              {isArabic ? 'تسجيل دخول المشرف' : 'Administrator Access'}
+            </button>
+            <p className="text-[10px] text-slate-500 font-mono">
+              {isArabic ? 'يتطلب بريد إلكتروني معتمد للأدمن' : 'Requires authorized admin credentials'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#FBFBFA] min-h-screen text-[#1D1D1C] flex flex-col selection:bg-[#C5A880]/30 select-none">
@@ -523,6 +530,7 @@ export default function App() {
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         categories={categories}
+        currency={storeSettings.currency}
       />
 
       {/* Main Container Section */}
@@ -545,9 +553,18 @@ export default function App() {
                   if (box) box.style.display = 'flex';
                 }
               }}
+              heroTitle={storeSettings.heroTitle}
+              heroTitleAr={storeSettings.heroTitleAr}
+              heroSubtitle={storeSettings.heroSubtitle}
+              heroSubtitleAr={storeSettings.heroSubtitleAr}
+              heroBg={storeSettings.heroBg}
+              heroBg2={storeSettings.heroBg2}
+              heroBg3={storeSettings.heroBg3}
+              heroBg4={storeSettings.heroBg4}
+              heroLayout={storeSettings.heroLayout}
             />
 
-            {/* Curated Categories Visual Blocks */}
+            {/* Curated Categories Visual Blocks - Dynamic from Firestore */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="curated-categories-block">
               <div className="text-center space-y-2 mb-10" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
                 <span className="text-[10px] sm:text-xs font-black tracking-[0.2em] text-indigo-600 uppercase">
@@ -567,85 +584,72 @@ export default function App() {
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
-                {[
-                  {
-                    id: 'apparel',
-                    titleAr: 'الملابس والموضة',
-                    titleEn: 'Apparel & Fashion',
-                    descAr: 'معاطف من الصوف الإيطالي وحقائب جلدية مخيطة يدويًا',
-                    descEn: 'Premium merino coats and hand-stitched full-grain bags',
-                    image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=600&auto=format&fit=crop',
-                    badgeAr: 'فخامة هادئة',
-                    badgeEn: 'Quiet Luxury'
-                  },
-                  {
-                    id: 'wellness',
-                    titleAr: 'العناية والعطور الطبيعية',
-                    titleEn: 'Wellness & Scents',
-                    descAr: 'زيوت عطرية وشموع فاخرة بالعود والمسك والعنبر الصافي',
-                    descEn: 'Artisanal oud, amber oils and organic atmosphere candles',
-                    image: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?q=80&w=600&auto=format&fit=crop',
-                    badgeAr: 'مستخلص طبيعي',
-                    badgeEn: '100% Organic'
-                  },
-                  {
-                    id: 'home',
-                    titleAr: 'المنزل والقطع الفنية',
-                    titleEn: 'Modern Home Decor',
-                    descAr: 'أكواب سيراميك مصنوعة يدويًا ومفارش من الكتان الطبيعي',
-                    descEn: 'Handmade studio ceramics and raw linen luxury bedding',
-                    image: 'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?q=80&w=600&auto=format&fit=crop',
-                    badgeAr: 'حرفية يدوية',
-                    badgeEn: 'Artisanal Studio'
-                  },
-                  {
-                    id: 'tech',
-                    titleAr: 'الإكسسوارات التقنية',
-                    titleEn: 'Bespoke Tech Accents',
-                    descAr: 'حافظات ومساند جلدية من الجلد الطبيعي للأجهزة اللوحية',
-                    descEn: 'Handcrafted calfskin sleeves and gold-brushed desk details',
-                    image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?q=80&w=600&auto=format&fit=crop',
-                    badgeAr: 'إصدار محدود',
-                    badgeEn: 'Limited Edition'
-                  }
-                ].map((cat) => (
-                  <motion.div
-                    key={cat.id}
-                    whileHover={{ y: -6, scale: 1.01 }}
-                    onClick={() => {
-                      setSelectedCategory(cat.id);
-                      setView('catalog');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="relative h-96 rounded-[2rem] overflow-hidden group cursor-pointer shadow-sm hover:shadow-2xl hover:shadow-indigo-600/10 transition-all duration-300 border-2 border-transparent hover:border-indigo-100"
-                  >
-                    {/* Dark gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-900/10 z-10" />
-                    <img
-                      src={cat.image}
-                      alt={cat.titleEn}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                    />
+                {categories.length > 0 ? (
+                  categories.map((cat) => {
+                    const imageUrl = getCategoryImage(cat);
+                    
+                    return (
+                      <motion.div
+                        key={cat.id}
+                        whileHover={{ y: -6, scale: 1.01 }}
+                        onClick={() => {
+                          setSelectedCategory(cat.id);
+                          setView('catalog');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="relative h-96 rounded-[2rem] overflow-hidden group cursor-pointer shadow-sm hover:shadow-2xl hover:shadow-indigo-600/10 transition-all duration-300 border-2 border-transparent hover:border-indigo-100"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-900/10 z-10" />
+                        <img
+                          src={imageUrl}
+                          alt={isArabic ? cat.nameAr : cat.name}
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                        />
 
-                    {/* Content */}
-                    <div className="absolute inset-x-0 bottom-0 p-6 z-20 flex flex-col justify-end h-full text-white">
-                      <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/80 px-2.5 py-1 rounded-full w-max mb-3 backdrop-blur-md border border-indigo-500/20">
-                        {isArabic ? cat.badgeAr : cat.badgeEn}
-                      </span>
-                      <h3 className="text-lg font-black tracking-wide">
-                        {isArabic ? cat.titleAr : cat.titleEn}
-                      </h3>
-                      <p className="text-[11px] text-slate-300 font-medium mt-1.5 leading-relaxed">
-                        {isArabic ? cat.descAr : cat.descEn}
-                      </p>
+                        <div className="absolute inset-x-0 bottom-0 p-6 z-20 flex flex-col justify-end h-full text-white">
+                          <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/80 px-2.5 py-1 rounded-full w-max mb-3 backdrop-blur-md border border-indigo-500/20">
+                            {cat.subcategories && cat.subcategories.length > 0 
+                              ? `${cat.subcategories.length} ${isArabic ? 'فئة فرعية' : 'Subcategories'}`
+                              : isArabic ? 'فئة رئيسية' : 'Main Category'}
+                          </span>
+                          <h3 className="text-lg font-black tracking-wide">
+                            {isArabic ? cat.nameAr : cat.name}
+                          </h3>
+                          <p className="text-[11px] text-slate-300 font-medium mt-1.5 leading-relaxed">
+                            {cat.subcategories && cat.subcategories.length > 0
+                              ? isArabic 
+                                ? `يحتوي على ${cat.subcategories.length} فئات فرعية متنوعة`
+                                : `Includes ${cat.subcategories.length} diverse subcategories`
+                              : isArabic
+                                ? 'استكشف مجموعة متنوعة من المنتجات'
+                                : 'Explore a diverse product collection'}
+                          </p>
 
-                      <div className="mt-4 flex items-center gap-1.5 text-xs font-black text-indigo-300 group-hover:text-indigo-200 transition-colors">
-                        <span>{isArabic ? 'استكشف المجموعة' : 'Explore Curation'}</span>
-                        <span className="group-hover:translate-x-1 transition-transform">→</span>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                          <div className="mt-4 flex items-center gap-1.5 text-xs font-black text-indigo-300 group-hover:text-indigo-200 transition-colors">
+                            <span>{isArabic ? 'استكشف المجموعة' : 'Explore Curation'}</span>
+                            <span className="group-hover:translate-x-1 transition-transform">→</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-full text-center py-12">
+                    <p className="text-slate-400 text-sm">
+                      {isArabic 
+                        ? '⚠️ لم يتم إضافة أي فئات بعد. يرجى استخدام لوحة التحكم لإضافة فئات جديدة.' 
+                        : '⚠️ No categories added yet. Please use the admin dashboard to add new categories.'}
+                    </p>
+                    <button
+                      onClick={() => setView('admin')}
+                      className="mt-4 px-6 py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer"
+                    >
+                      {isArabic ? 'فتح لوحة التحكم' : 'Open Admin Dashboard'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -680,157 +684,132 @@ export default function App() {
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
-                {(products.length > 0 ? products : PRODUCTS).filter(p => p.isFeatured).slice(0, 4).map(prod => (
+                {products.filter(p => p.isFeatured).slice(0, 4).map(prod => (
                   <ProductCard
                     key={prod.id}
                     product={prod}
                     onSelect={handleSelectProduct}
                     onAddToCart={handleAddToCart}
                     isArabic={isArabic}
+                    currency={storeSettings.currency}
                   />
                 ))}
               </div>
             </div>
 
-            {/* Category Showcase Sections */}
-            {(() => {
-              const homeCategories = [
-                {
-                  id: 'apparel',
-                  titleAr: 'الملابس والموضة',
-                  titleEn: 'Luxury Apparel & Fashion',
-                  descAr: 'تصاميم كلاسيكية خالدة مصنوعة من أرقى خامات الصوف الإيطالي والكتان الفاخر لتناسب مظهرك الأنيق والفريد.',
-                  descEn: 'Timeless classic designs crafted from the finest Italian wool and luxury linen to suit your refined lifestyle.',
-                  image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800&auto=format&fit=crop',
-                },
-                {
-                  id: 'wellness',
-                  titleAr: 'العناية والعطور الطبيعية',
-                  titleEn: 'Aromatherapy & Wellness',
-                  descAr: 'رحلة حسية غنية مع شموع الصويا الطبيعية والزيوت العطرية النقية المستخلصة من العود والمسك والعنبر النادر.',
-                  descEn: 'A sensory journey with organic soy candles and pure distilled aromatic oils of oud, musk, and rare amber.',
-                  image: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?q=80&w=800&auto=format&fit=crop',
-                },
-                {
-                  id: 'home',
-                  titleAr: 'المنزل والقطع الفنية',
-                  titleEn: 'Artisan Home Decor',
-                  descAr: 'مقتنيات خزفية فريدة وأوانٍ مصنوعة يدوياً بحرفية عالية تضفي دفئاً وجمالاً حقيقياً على زوايا منزلك العصري.',
-                  descEn: 'Unique studio ceramics and handcrafted clayware designed to bring raw warmth and tactile beauty to your home.',
-                  image: 'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?q=80&w=800&auto=format&fit=crop',
-                },
-                {
-                  id: 'tech',
-                  titleAr: 'الإكسسوارات التقنية',
-                  titleEn: 'Bespoke Tech Accents',
-                  descAr: 'إكسسوارات فاخرة وحافظات جلدية طبيعية تجمع بين الحماية الفائقة والمظهر الكلاسيكي الأنيق لأجهزتك اليومية.',
-                  descEn: 'Premium calfskin sleeves and desktop organizers blending high-end device protection with sleek modern aesthetics.',
-                  image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?q=80&w=800&auto=format&fit=crop',
-                }
-              ];
+            {/* Category Showcase Sections - Dynamic from Firestore */}
+            {categories.map((cat, idx) => {
+              const catProducts = products.filter(p => matchProductCategory(p, cat.id, categories));
+              const isEven = idx % 2 === 0;
+              
+              // إذا لم يكن هناك منتجات في هذه الفئة، تخطى العرض
+              if (catProducts.length === 0) return null;
 
-              return homeCategories.map((cat, idx) => {
-                const catProducts = (products.length > 0 ? products : PRODUCTS).filter(p => p.category === cat.id);
-                const isEven = idx % 2 === 0;
+              const imageUrl = getCategoryImage(cat);
 
-                return (
-                  <div key={cat.id} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <div 
-                      className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
-                      style={{ direction: isArabic ? 'rtl' : 'ltr' }}
-                    >
-                      {/* Category Banner Card */}
-                      <div className={`lg:col-span-4 flex flex-col justify-between p-8 rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group min-h-[350px] lg:min-h-full ${
-                        isEven ? 'lg:order-first' : 'lg:order-last'
-                      }`}>
-                        {/* Dark background overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/20 z-10" />
-                        <img 
-                          src={cat.image} 
-                          alt={cat.titleEn}
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
-                        />
+              return (
+                <div key={cat.id} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                  <div 
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
+                    style={{ direction: isArabic ? 'rtl' : 'ltr' }}
+                  >
+                    {/* Category Banner Card */}
+                    <div className={`lg:col-span-4 flex flex-col justify-between p-8 rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group min-h-[350px] lg:min-h-full ${
+                      isEven ? 'lg:order-first' : 'lg:order-last'
+                    }`}>
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/20 z-10" />
+                      <img 
+                        src={imageUrl} 
+                        alt={isArabic ? cat.nameAr : cat.name}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                      />
 
-                        {/* Top info */}
-                        <div className="relative z-20 space-y-3">
-                          <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/50 px-3 py-1 rounded-full border border-indigo-500/20 w-max block">
-                            {isArabic ? 'فئة متميزة' : 'FEATURED CATEGORY'}
-                          </span>
-                          <h3 className="text-xl sm:text-2xl font-black font-sans leading-tight">
-                            {isArabic ? cat.titleAr : cat.titleEn}
-                          </h3>
-                          <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                            {isArabic ? cat.descAr : cat.descEn}
-                          </p>
-                        </div>
+                      <div className="relative z-20 space-y-3">
+                        <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/50 px-3 py-1 rounded-full border border-indigo-500/20 w-max block">
+                          {isArabic ? 'فئة متميزة' : 'FEATURED CATEGORY'}
+                        </span>
+                        <h3 className="text-xl sm:text-2xl font-black font-sans leading-tight">
+                          {isArabic ? cat.nameAr : cat.name}
+                        </h3>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                          {cat.subcategories && cat.subcategories.length > 0
+                            ? isArabic 
+                              ? `يشمل ${cat.subcategories.length} فئات فرعية: ${cat.subcategories.map(s => s.nameAr).join('، ')}`
+                              : `Includes ${cat.subcategories.length} subcategories: ${cat.subcategories.map(s => s.name).join(', ')}`
+                            : isArabic
+                              ? 'مجموعة متنوعة من المنتجات الفاخرة'
+                              : 'A diverse collection of luxury products'}
+                        </p>
+                      </div>
 
-                        {/* Action view full */}
-                        <div className="relative z-20 pt-6">
-                          <button
+                      <div className="relative z-20 pt-6">
+                        <button
+                          onClick={() => {
+                            setSelectedCategory(cat.id);
+                            setView('catalog');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="w-full py-3.5 px-5 bg-white hover:bg-indigo-50 text-indigo-600 text-xs font-black rounded-2xl shadow-lg shadow-white/5 transition-all duration-300 cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>{isArabic ? `عرض كل ${cat.nameAr}` : `View All ${cat.name}`}</span>
+                          <span className={isArabic ? 'rotate-180' : ''}>→</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Associated Category Products */}
+                    <div className="lg:col-span-8 flex flex-col justify-center overflow-hidden">
+                      <div className="flex items-center justify-between mb-3 px-1">
+                        <span className="text-[10px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          {isArabic ? 'اسحب لتصفح المنتجات' : 'Swipe / Scroll to browse'}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button 
                             onClick={() => {
-                              setSelectedCategory(cat.id);
-                              setView('catalog');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              const el = document.getElementById(`strip-${cat.id}`);
+                              if (el) el.scrollBy({ left: isArabic ? 240 : -240, behavior: 'smooth' });
                             }}
-                            className="w-full py-3.5 px-5 bg-white hover:bg-indigo-50 text-indigo-600 text-xs font-black rounded-2xl shadow-lg shadow-white/5 transition-all duration-300 cursor-pointer flex items-center justify-center gap-1.5"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                           >
-                            <span>{isArabic ? `عرض كل ${cat.titleAr}` : `View All ${cat.titleEn}`}</span>
-                            <span className={isArabic ? 'rotate-180' : ''}>→</span>
+                            <span className="block text-xs font-black">←</span>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const el = document.getElementById(`strip-${cat.id}`);
+                              if (el) el.scrollBy({ left: isArabic ? -240 : 240, behavior: 'smooth' });
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <span className="block text-xs font-black">→</span>
                           </button>
                         </div>
                       </div>
 
-                      {/* Associated Category Products */}
-                      <div className="lg:col-span-8 flex flex-col justify-center overflow-hidden">
-                        <div className="flex items-center justify-between mb-3 px-1">
-                          <span className="text-[10px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            {isArabic ? 'اسحب لتصفح المنتجات' : 'Swipe / Scroll to browse'}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => {
-                                const el = document.getElementById(`strip-${cat.id}`);
-                                if (el) el.scrollBy({ left: isArabic ? 240 : -240, behavior: 'smooth' });
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <span className="block text-xs font-black">←</span>
-                            </button>
-                            <button 
-                              onClick={() => {
-                                const el = document.getElementById(`strip-${cat.id}`);
-                                if (el) el.scrollBy({ left: isArabic ? -240 : 240, behavior: 'smooth' });
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <span className="block text-xs font-black">→</span>
-                            </button>
+                      <div 
+                        className="flex gap-5 overflow-x-auto pb-4 pt-1 px-1 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        id={`strip-${cat.id}`}
+                      >
+                        {catProducts.map(prod => (
+                          <div key={prod.id} className="min-w-[190px] sm:min-w-[220px] max-w-[220px] flex-shrink-0 snap-start">
+                            <ProductCard
+                              product={prod}
+                              onSelect={handleSelectProduct}
+                              onAddToCart={handleAddToCart}
+                              isArabic={isArabic}
+                              isCompact={true}
+                              currency={storeSettings.currency}
+                            />
                           </div>
-                        </div>
-
-                        <div 
-                          className="flex gap-5 overflow-x-auto pb-4 pt-1 px-1 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                          id={`strip-${cat.id}`}
-                        >
-                          {catProducts.map(prod => (
-                            <div key={prod.id} className="min-w-[190px] sm:min-w-[220px] max-w-[220px] flex-shrink-0 snap-start">
-                              <ProductCard
-                                product={prod}
-                                onSelect={handleSelectProduct}
-                                onAddToCart={handleAddToCart}
-                                isArabic={isArabic}
-                                isCompact={true}
-                              />
-                            </div>
-                          ))}
-                        </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                );
-              });
-            })()}
+                </div>
+              );
+            })}
 
             {/* Experience Bento Block */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -838,7 +817,6 @@ export default function App() {
                 className="bg-slate-900 text-white rounded-[3rem] p-8 md:p-14 overflow-hidden relative shadow-2xl animate-fade-in"
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
-                {/* Decorative glowing gradient backdrop */}
                 <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
                 <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none" />
 
@@ -924,9 +902,8 @@ export default function App() {
 
         {view === 'catalog' && (
           <div className="space-y-4 pb-24 animate-fade-in">
-            {/* Custom Interactive All Collection Catalog */}
             <AllCollection
-              products={products.length > 0 ? products : PRODUCTS}
+              products={products}
               selectedCategory={selectedCategory}
               onCategoryChange={(cat) => {
                 setSelectedCategory(cat);
@@ -940,6 +917,7 @@ export default function App() {
               onAddToCart={handleAddToCart}
               isArabic={isArabic}
               categories={categories}
+              currency={storeSettings.currency}
             />
           </div>
         )}
@@ -960,6 +938,9 @@ export default function App() {
             onAddToCart={handleAddToCart}
             isArabic={isArabic}
             onAddReview={handleAddReview}
+            allProducts={products}
+            onSelectProduct={handleSelectProduct}
+            currency={storeSettings.currency}
           />
         )}
 
@@ -972,6 +953,7 @@ export default function App() {
             onComplete={handleCompleteCheckout}
             onCancel={() => setView('catalog')}
             isArabic={isArabic}
+            currency={storeSettings.currency}
           />
         )}
 
@@ -980,6 +962,9 @@ export default function App() {
             orders={orders}
             onClose={() => setView('catalog')}
             isArabic={isArabic}
+            user={user}
+            onSignIn={handleSignIn}
+            currency={storeSettings.currency}
           />
         )}
       </main>
@@ -996,7 +981,62 @@ export default function App() {
           setView('checkout');
         }}
         isArabic={isArabic}
+        currency={storeSettings.currency}
       />
+
+      {/* Floating Vertical Social Rail */}
+      <div className="fixed right-3 sm:right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-2.5 sm:gap-3.5 bg-white/80 hover:bg-white/95 backdrop-blur-md border border-slate-200/50 p-2 rounded-2xl shadow-xl transition-all duration-300" id="social-vertical-rail">
+        {storeSettings.facebook && (
+          <motion.a
+            whileHover={{ scale: 1.15, rotate: 5 }}
+            href={storeSettings.facebook}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-50/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-colors"
+            title="Facebook"
+          >
+            <Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </motion.a>
+        )}
+        {storeSettings.instagram && (
+          <motion.a
+            whileHover={{ scale: 1.15, rotate: -5 }}
+            href={storeSettings.instagram}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-50/50 hover:bg-pink-50 border border-slate-100 hover:border-pink-200 flex items-center justify-center text-slate-500 hover:text-pink-600 transition-colors"
+            title="Instagram"
+          >
+            <Instagram className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </motion.a>
+        )}
+        {storeSettings.twitter && (
+          <motion.a
+            whileHover={{ scale: 1.15, rotate: 5 }}
+            href={storeSettings.twitter}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-50/50 hover:bg-slate-100 border border-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors"
+            title="Twitter / X"
+          >
+            <Twitter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </motion.a>
+        )}
+        {storeSettings.tiktok && (
+          <motion.a
+            whileHover={{ scale: 1.15, rotate: -5 }}
+            href={storeSettings.tiktok}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-50/50 hover:bg-slate-100 border border-slate-100 hover:border-slate-300 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors"
+            title="TikTok"
+          >
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.06-2.89-.54-4.06-1.42-.45-.34-.83-.73-1.15-1.18V14.5c0 1.78-.49 3.58-1.57 4.97-1.44 1.83-3.72 2.92-6.02 2.9C6.8 22.31 4 20.08 3.12 17.3c-.92-2.91.07-6.39 2.5-8.23 1.54-1.16 3.51-1.63 5.42-1.39V11.8c-1.04-.3-2.19-.15-3.09.43-.9.58-1.45 1.62-1.43 2.72.03 1.84 1.77 3.33 3.59 3.12 1.4-.16 2.52-1.25 2.76-2.63.15-.84.03-11.45.03-11.45.36.03.73.02 1.1-.02-.1-.01-.1-.01-.1-.01z"/>
+            </svg>
+          </motion.a>
+        )}
+      </div>
 
       {/* Corner Floating Smart shopping consultant chatbot */}
       <AiAssistant isArabic={isArabic} />
@@ -1015,18 +1055,53 @@ export default function App() {
           <div>
             <h4 className="text-white text-xs font-bold tracking-wider uppercase mb-3">{isArabic ? 'مجموعاتنا' : 'Categories'}</h4>
             <ul className="text-xs space-y-2 text-[#8E8D8A]">
-              <li>{isArabic ? 'الملابس والمعاطف' : 'Apparel & Overcoats'}</li>
-              <li>{isArabic ? 'الحقائب والجلديات' : 'Leather Bags'}</li>
-              <li>{isArabic ? 'العطور الطبيعية' : 'Signature Fragrances'}</li>
-              <li>{isArabic ? 'أكواب السيراميك' : 'Handcrafted Ceramics'}</li>
+              {categories.slice(0, 4).map(cat => (
+                <li 
+                  key={cat.id} 
+                  className="hover:text-white cursor-pointer transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    setView('catalog');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  {cat.image && (
+                    <img 
+                      src={cat.image} 
+                      alt="" 
+                      className="w-4 h-4 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  <span>{isArabic ? cat.nameAr : cat.name}</span>
+                </li>
+              ))}
+              {categories.length === 0 && (
+                <li>{isArabic ? 'لا توجد فئات' : 'No categories'}</li>
+              )}
             </ul>
           </div>
           <div>
             <h4 className="text-white text-xs font-bold tracking-wider uppercase mb-3">{isArabic ? 'الدعم والمساعدة' : 'Client Services'}</h4>
             <ul className="text-xs space-y-2 text-[#8E8D8A]">
+              {storeSettings.supportPhone && (
+                <li>
+                  {isArabic ? 'الهاتف: ' : 'Phone: '}
+                  <a href={`tel:${storeSettings.supportPhone}`} className="hover:text-white transition-colors font-mono">
+                    {storeSettings.supportPhone}
+                  </a>
+                </li>
+              )}
+              {storeSettings.supportEmail && (
+                <li>
+                  {isArabic ? 'البريد الإلكتروني: ' : 'Email: '}
+                  <a href={`mailto:${storeSettings.supportEmail}`} className="hover:text-white transition-colors">
+                    {storeSettings.supportEmail}
+                  </a>
+                </li>
+              )}
               <li>{isArabic ? 'شروط التوصيل والاسترجاع' : 'Delivery & Returns policy'}</li>
               <li>{isArabic ? 'سياسة الخصوصية والأمان' : 'Secure privacy rules'}</li>
-              <li>{isArabic ? 'الاستشارة الذكية المباشرة' : 'Consult our live concierge'}</li>
               <li>{isArabic ? 'حقوق الطبع والنشر © 2026 زيوكا' : 'Copyright © 2026 ZEWKA. All Rights Reserved.'}</li>
             </ul>
           </div>

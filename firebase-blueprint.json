@@ -115,6 +115,7 @@
         "specsAr": { "type": "object" },
         "stock": { "type": "number" },
         "isFeatured": { "type": "boolean" },
+        "shippingPlanId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "nameAr", "price", "category", "image", "stock"]
@@ -149,6 +150,47 @@
         "status": { "type": "string", "enum": ["active", "inactive"] }
       },
       "required": ["id", "name", "nameAr", "cost", "deliveryTime", "status"]
+    },
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "General boutique configuration and content.",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "storeNameAr": { "type": "string" },
+        "tagline": { "type": "string" },
+        "taglineAr": { "type": "string" },
+        "currency": { "type": "string" },
+        "vatPercent": { "type": "number" },
+        "supportEmail": { "type": "string" },
+        "supportPhone": { "type": "string" },
+        "heroTitle": { "type": "string" },
+        "heroTitleAr": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "heroSubtitleAr": { "type": "string" },
+        "heroBg": { "type": "string" },
+        "maintenanceMode": { "type": "boolean" },
+        "facebook": { "type": "string" },
+        "instagram": { "type": "string" },
+        "twitter": { "type": "string" },
+        "tiktok": { "type": "string" }
+      },
+      "required": [
+        "storeName",
+        "storeNameAr",
+        "tagline",
+        "taglineAr",
+        "currency",
+        "vatPercent",
+        "supportEmail",
+        "supportPhone",
+        "heroTitle",
+        "heroTitleAr",
+        "heroSubtitle",
+        "heroSubtitleAr",
+        "heroBg",
+        "maintenanceMode"
+      ]
     }
   },
   "firestore": {
@@ -175,6 +217,10 @@
     "/shippingPlans/{planId}": {
       "schema": "ShippingPlan",
       "description": "Shipping plans configurations."
+    },
+    "/settings/{settingId}": {
+      "schema": "StoreSettings",
+      "description": "Boutique global configuration, content, and maintenance mode."
     }
   }
 }
