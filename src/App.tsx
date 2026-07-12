@@ -11,11 +11,11 @@ import OrdersHistory from './components/OrdersHistory';
 import AllCollection from './components/AllCollection';
 
 import { CartItem, Product, Review, Order, ShippingStatus, Category } from './types';
-import { matchProductCategory } from './utils';
-import { Facebook, Instagram, Twitter } from 'lucide-react';
+import { matchProductCategory, cleanUndefined } from './utils';
+import { Facebook, Instagram, Twitter, AlertTriangle, X, ExternalLink, Copy, Check } from 'lucide-react';
 
 // Firebase Imports
-import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, User } from 'firebase/auth';
 import { collection, doc, getDoc, setDoc, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from './lib/firebase';
 import AdminDashboard from './components/AdminDashboard';
@@ -23,6 +23,19 @@ import AdminDashboard from './components/AdminDashboard';
 export default function App() {
   const [view, setView] = useState<'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin'>('home');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Real mobile screen detection (independent of the viewport scale)
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isSmallScreen = window.screen.width < 768 || window.innerWidth < 1024;
+      setIsMobileScreen(isMobileUA || isSmallScreen);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -34,6 +47,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isArabic, setIsArabic] = useState(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   // Site Settings State (Synchronized in Real-time)
   const [storeSettings, setStoreSettings] = useState({
@@ -77,13 +91,40 @@ export default function App() {
   // Firebase Auth and Cart Sync States
   const [user, setUser] = useState<User | null>(null);
   const [isCartLoaded, setIsCartLoaded] = useState(false);
+  const [authError, setAuthError] = useState<any | null>(null);
+
+  // Handle redirect result on mount
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          console.log("Signed in via redirect:", result.user);
+        }
+      })
+      .catch((error: any) => {
+        console.error("Redirect auth error:", error);
+        setAuthError(error);
+      });
+  }, []);
 
   // Authentication Handlers
   const handleSignIn = async () => {
     try {
+      setAuthError(null);
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Authentication failed: ", error);
+      setAuthError(error);
+    }
+  };
+
+  const handleSignInRedirect = async () => {
+    try {
+      setAuthError(null);
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error: any) {
+      console.error("Redirect Sign in failed: ", error);
+      setAuthError(error);
     }
   };
 
@@ -230,11 +271,11 @@ export default function App() {
     if (user && isCartLoaded) {
       const updateCloudCart = async () => {
         try {
-          await setDoc(doc(db, 'carts', user.uid), {
+          await setDoc(doc(db, 'carts', user.uid), cleanUndefined({
             userId: user.uid,
             items: cart,
             updatedAt: new Date().toISOString()
-          });
+          }));
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `carts/${user.uid}`);
         }
@@ -270,7 +311,7 @@ export default function App() {
           changed = true;
           const updated = { ...order, shippingStatus: nextStatus };
           
-          setDoc(doc(db, 'orders', order.id), updated).catch(err => {
+          setDoc(doc(db, 'orders', order.id), cleanUndefined(updated)).catch(err => {
             console.error("Error progressing order status in Firestore: ", err);
           });
           return updated;
@@ -377,7 +418,7 @@ export default function App() {
         userId: user?.uid || 'guest',
         createdAt: new Date().toISOString()
       };
-      await setDoc(doc(db, 'reviews', reviewId), reviewToSave);
+      await setDoc(doc(db, 'reviews', reviewId), cleanUndefined(reviewToSave));
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `reviews/${reviewId}`);
     }
@@ -403,18 +444,18 @@ export default function App() {
     };
 
     try {
-      await setDoc(doc(db, 'orders', newOrder.id), orderToSave);
+      await setDoc(doc(db, 'orders', newOrder.id), cleanUndefined(orderToSave));
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `orders/${newOrder.id}`);
     }
 
     if (user) {
       try {
-        await setDoc(doc(db, 'carts', user.uid), {
+        await setDoc(doc(db, 'carts', user.uid), cleanUndefined({
           userId: user.uid,
           items: [],
           updatedAt: new Date().toISOString()
-        });
+        }));
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `carts/${user.uid}`);
       }
@@ -581,7 +622,7 @@ export default function App() {
               </div>
 
               <div 
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'}`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
                 {categories.length > 0 ? (
@@ -597,7 +638,7 @@ export default function App() {
                           setView('catalog');
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
-                        className="relative h-96 rounded-[2rem] overflow-hidden group cursor-pointer shadow-sm hover:shadow-2xl hover:shadow-indigo-600/10 transition-all duration-300 border-2 border-transparent hover:border-indigo-100"
+                        className={`relative h-96 rounded-[2rem] overflow-hidden group cursor-pointer shadow-sm hover:shadow-2xl hover:shadow-indigo-600/10 transition-all duration-300 border-2 border-transparent hover:border-indigo-100 ${isMobileScreen ? 'min-w-[280px] flex-shrink-0 snap-start' : 'w-full'}`}
                       >
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-900/10 z-10" />
                         <img
@@ -681,18 +722,19 @@ export default function App() {
               </div>
 
               <div 
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
+                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8'}`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
                 {products.filter(p => p.isFeatured).slice(0, 4).map(prod => (
-                  <ProductCard
-                    key={prod.id}
-                    product={prod}
-                    onSelect={handleSelectProduct}
-                    onAddToCart={handleAddToCart}
-                    isArabic={isArabic}
-                    currency={storeSettings.currency}
-                  />
+                  <div key={prod.id} className={isMobileScreen ? 'min-w-[285px] flex-shrink-0 snap-start animate-fade-in' : 'w-full'}>
+                    <ProductCard
+                      product={prod}
+                      onSelect={handleSelectProduct}
+                      onAddToCart={handleAddToCart}
+                      isArabic={isArabic}
+                      currency={storeSettings.currency}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -709,91 +751,57 @@ export default function App() {
 
               return (
                 <div key={cat.id} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                  <div 
-                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
-                    style={{ direction: isArabic ? 'rtl' : 'ltr' }}
-                  >
-                    {/* Category Banner Card */}
-                    <div className={`lg:col-span-4 flex flex-col justify-between p-8 rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group min-h-[350px] lg:min-h-full ${
-                      isEven ? 'lg:order-first' : 'lg:order-last'
-                    }`}>
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/20 z-10" />
-                      <img 
-                        src={imageUrl} 
-                        alt={isArabic ? cat.nameAr : cat.name}
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                      />
-
-                      <div className="relative z-20 space-y-3">
-                        <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/50 px-3 py-1 rounded-full border border-indigo-500/20 w-max block">
-                          {isArabic ? 'فئة متميزة' : 'FEATURED CATEGORY'}
-                        </span>
-                        <h3 className="text-xl sm:text-2xl font-black font-sans leading-tight">
-                          {isArabic ? cat.nameAr : cat.name}
-                        </h3>
-                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                          {cat.subcategories && cat.subcategories.length > 0
-                            ? isArabic 
-                              ? `يشمل ${cat.subcategories.length} فئات فرعية: ${cat.subcategories.map(s => s.nameAr).join('، ')}`
-                              : `Includes ${cat.subcategories.length} subcategories: ${cat.subcategories.map(s => s.name).join(', ')}`
-                            : isArabic
-                              ? 'مجموعة متنوعة من المنتجات الفاخرة'
-                              : 'A diverse collection of luxury products'}
-                        </p>
-                      </div>
-
-                      <div className="relative z-20 pt-6">
-                        <button
-                          onClick={() => {
-                            setSelectedCategory(cat.id);
-                            setView('catalog');
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="w-full py-3.5 px-5 bg-white hover:bg-indigo-50 text-indigo-600 text-xs font-black rounded-2xl shadow-lg shadow-white/5 transition-all duration-300 cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          <span>{isArabic ? `عرض كل ${cat.nameAr}` : `View All ${cat.name}`}</span>
-                          <span className={isArabic ? 'rotate-180' : ''}>→</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Associated Category Products */}
-                    <div className="lg:col-span-8 flex flex-col justify-center overflow-hidden">
-                      <div className="flex items-center justify-between mb-3 px-1">
-                        <span className="text-[10px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          {isArabic ? 'اسحب لتصفح المنتجات' : 'Swipe / Scroll to browse'}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button 
-                            onClick={() => {
-                              const el = document.getElementById(`strip-${cat.id}`);
-                              if (el) el.scrollBy({ left: isArabic ? 240 : -240, behavior: 'smooth' });
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <span className="block text-xs font-black">←</span>
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const el = document.getElementById(`strip-${cat.id}`);
-                              if (el) el.scrollBy({ left: isArabic ? -240 : 240, behavior: 'smooth' });
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <span className="block text-xs font-black">→</span>
-                          </button>
+                  {isMobileScreen ? (
+                    /* Mobile Single Horizontal Swipe Track */
+                    <div className="space-y-4" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-black text-slate-800">
+                            {isArabic ? cat.nameAr : cat.name}
+                          </h3>
                         </div>
+                        <span className="text-[10px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          {isArabic ? 'اسحب لمشاهدة الكل' : 'Swipe to see all'}
+                        </span>
                       </div>
+                      <div className="flex gap-5 overflow-x-auto pb-4 pt-1 px-1 scroll-smooth snap-x snap-mandatory scrollbar-thin">
+                        {/* 1. The Category Banner Card adapted for mobile track */}
+                        <div className="min-w-[240px] max-w-[240px] flex-shrink-0 snap-start rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group h-[350px] p-6 flex flex-col justify-between shadow-md">
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/20 z-10" />
+                          <img 
+                            src={imageUrl} 
+                            alt={isArabic ? cat.nameAr : cat.name}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                          />
+                          <div className="relative z-20 space-y-1">
+                            <span className="text-[9px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/50 px-2.5 py-0.5 rounded-full border border-indigo-500/20 w-max block">
+                              {isArabic ? 'تشكيلة مميزة' : 'FEATURED'}
+                            </span>
+                            <h3 className="text-base font-black font-sans leading-tight">
+                              {isArabic ? cat.nameAr : cat.name}
+                            </h3>
+                          </div>
+                          <div className="relative z-20">
+                            <button
+                              onClick={() => {
+                                setSelectedCategory(cat.id);
+                                setView('catalog');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="w-full py-2.5 px-4 bg-white hover:bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <span>{isArabic ? 'عرض الفئة' : 'Explore'}</span>
+                              <span className={isArabic ? 'rotate-180' : ''}>→</span>
+                            </button>
+                          </div>
+                        </div>
 
-                      <div 
-                        className="flex gap-5 overflow-x-auto pb-4 pt-1 px-1 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                        id={`strip-${cat.id}`}
-                      >
+                        {/* 2. The Products in this Category */}
                         {catProducts.map(prod => (
-                          <div key={prod.id} className="min-w-[190px] sm:min-w-[220px] max-w-[220px] flex-shrink-0 snap-start">
+                          <div key={prod.id} className="min-w-[220px] max-w-[220px] flex-shrink-0 snap-start animate-fade-in">
                             <ProductCard
                               product={prod}
                               onSelect={handleSelectProduct}
@@ -806,7 +814,107 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Desktop Grid layout */
+                    <div 
+                      className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
+                      style={{ direction: isArabic ? 'rtl' : 'ltr' }}
+                    >
+                      {/* Category Banner Card */}
+                      <div className={`lg:col-span-4 flex flex-col justify-between p-8 rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group min-h-[350px] lg:min-h-full ${
+                        isEven ? 'lg:order-first' : 'lg:order-last'
+                      }`}>
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/20 z-10" />
+                        <img 
+                          src={imageUrl} 
+                          alt={isArabic ? cat.nameAr : cat.name}
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                        />
+
+                        <div className="relative z-20 space-y-3">
+                          <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/50 px-3 py-1 rounded-full border border-indigo-500/20 w-max block">
+                            {isArabic ? 'فئة متميزة' : 'FEATURED CATEGORY'}
+                          </span>
+                          <h3 className="text-xl sm:text-2xl font-black font-sans leading-tight">
+                            {isArabic ? cat.nameAr : cat.name}
+                          </h3>
+                          <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                            {cat.subcategories && cat.subcategories.length > 0
+                              ? isArabic 
+                                ? `يشمل ${cat.subcategories.length} فئات فرعية: ${cat.subcategories.map(s => s.nameAr).join('، ')}`
+                                : `Includes ${cat.subcategories.length} subcategories: ${cat.subcategories.map(s => s.name).join(', ')}`
+                              : isArabic
+                                ? 'مجموعة متنوعة من المنتجات الفاخرة'
+                                : 'A diverse collection of luxury products'}
+                          </p>
+                        </div>
+
+                        <div className="relative z-20 pt-6">
+                          <button
+                            onClick={() => {
+                              setSelectedCategory(cat.id);
+                              setView('catalog');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="w-full py-3.5 px-5 bg-white hover:bg-indigo-50 text-indigo-600 text-xs font-black rounded-2xl shadow-lg shadow-white/5 transition-all duration-300 cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <span>{isArabic ? `عرض كل ${cat.nameAr}` : `View All ${cat.name}`}</span>
+                            <span className={isArabic ? 'rotate-180' : ''}>→</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Associated Category Products */}
+                      <div className="lg:col-span-8 flex flex-col justify-center overflow-hidden">
+                        <div className="flex items-center justify-between mb-3 px-1">
+                          <span className="text-[10px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            {isArabic ? 'اسحب لتصفح المنتجات' : 'Swipe / Scroll to browse'}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => {
+                                const el = document.getElementById(`strip-${cat.id}`);
+                                if (el) el.scrollBy({ left: isArabic ? 240 : -240, behavior: 'smooth' });
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <span className="block text-xs font-black">←</span>
+                            </button>
+                            <button 
+                              onClick={() => {
+                                const el = document.getElementById(`strip-${cat.id}`);
+                                if (el) el.scrollBy({ left: isArabic ? -240 : 240, behavior: 'smooth' });
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <span className="block text-xs font-black">→</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div 
+                          className="flex gap-5 overflow-x-auto pb-4 pt-1 px-1 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                          id={`strip-${cat.id}`}
+                        >
+                          {catProducts.map(prod => (
+                            <div key={prod.id} className="min-w-[190px] sm:min-w-[220px] max-w-[220px] flex-shrink-0 snap-start animate-fade-in">
+                              <ProductCard
+                                product={prod}
+                                onSelect={handleSelectProduct}
+                                onAddToCart={handleAddToCart}
+                                isArabic={isArabic}
+                                isCompact={true}
+                                currency={storeSettings.currency}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1107,6 +1215,142 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Diagnostics and Fallback Login Modal (Vercel domain issue helper) */}
+      {authError && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden text-right"
+          >
+            {/* Header */}
+            <div className="bg-indigo-50/50 p-6 border-b border-indigo-50 flex items-center justify-between" style={{ flexDirection: isArabic ? 'row' : 'row-reverse' }}>
+              <div className="flex items-center gap-3" style={{ flexDirection: isArabic ? 'row' : 'row-reverse' }}>
+                <div className="p-2.5 bg-red-50 text-red-600 rounded-xl">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div style={{ textAlign: isArabic ? 'right' : 'left' }}>
+                  <h3 className="text-sm font-black text-slate-950">
+                    {isArabic ? 'تنبيه إعدادات تسجيل الدخول' : 'Login Setup Alert'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                    {isArabic ? 'تشخيص خطأ Firebase Auth على Vercel' : 'Diagnostics for Firebase Auth on Vercel'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAuthError(null)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto" style={{ textAlign: isArabic ? 'right' : 'left' }}>
+              {/* Detailed error if domain is unauthorized */}
+              {(authError?.code === 'auth/unauthorized-domain' || authError?.message?.includes('unauthorized-domain')) ? (
+                <div className="space-y-3.5">
+                  <div className="p-4 bg-red-50/70 border border-red-100 rounded-2xl text-xs text-red-950 font-bold leading-relaxed">
+                    {isArabic 
+                      ? `عذراً، لم يتم السماح بتسجيل الدخول للنطاق الحالي (${window.location.hostname}) في إعدادات مشروع Firebase الخاص بك.`
+                      : `The domain "${window.location.hostname}" is not authorized in your Firebase Project for OAuth sign-in.`}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black text-slate-900">
+                      {isArabic ? 'كيفية حل المشكلة بخطوات بسيطة:' : 'How to resolve in 3 simple steps:'}
+                    </h4>
+                    
+                    <ol className="text-xs text-slate-600 font-bold space-y-2 list-decimal list-inside bg-slate-50 p-4 rounded-2xl leading-relaxed">
+                      <li>
+                        {isArabic ? 'انسخ النطاق الحالي الخاص بموقعك:' : 'Copy your current website domain:'}
+                        <div className="mt-2 flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2 px-3.5" style={{ flexDirection: isArabic ? 'row-reverse' : 'row' }}>
+                          <span className="font-mono text-[11px] text-slate-800 select-all truncate flex-1 text-center">{window.location.hostname}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(window.location.hostname);
+                              setCopiedDomain(true);
+                              setTimeout(() => setCopiedDomain(false), 2000);
+                            }}
+                            className="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 font-black flex items-center gap-1 text-[10px] border border-indigo-50 shrink-0"
+                          >
+                            {copiedDomain ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedDomain ? (isArabic ? 'تم النسخ' : 'Copied') : (isArabic ? 'نسخ النطاق' : 'Copy')}</span>
+                          </button>
+                        </div>
+                      </li>
+                      <li>
+                        {isArabic 
+                          ? 'انتقل إلى لوحة تحكم Firebase (Firebase Console) الخاصة بمشروعك.' 
+                          : 'Go to your Firebase Console project.'}
+                      </li>
+                      <li>
+                        {isArabic 
+                          ? 'اذهب إلى Authentication 🡒 Settings 🡒 Authorized domains واضغط على Add Domain، ثم الصق النطاق الذي نسخته واحفظ التغييرات.' 
+                          : 'Navigate to Authentication ➔ Settings ➔ Authorized domains, click "Add Domain", paste the domain, and save.'}
+                      </li>
+                    </ol>
+                  </div>
+                </div>
+              ) : (authError?.code === 'auth/popup-blocked' || authError?.message?.includes('popup-blocked')) ? (
+                <div className="space-y-3.5">
+                  <div className="p-4 bg-amber-50/70 border border-amber-100 rounded-2xl text-xs text-amber-950 font-bold leading-relaxed">
+                    {isArabic 
+                      ? 'تم حظر النوافذ المنبثقة بواسطة متصفحك. يرجى تفعيل السماح بالنوافذ المنبثقة، أو تجربة استخدام طريقة تسجيل الدخول بإعادة التوجيه (Redirect) المتاحة بالأسفل.'
+                      : 'The login popup was blocked by your browser. Please allow popups for this site, or use the Redirect Sign-In method below.'}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  <div className="p-4 bg-red-50/70 border border-red-100 rounded-2xl text-xs text-red-950 font-bold leading-relaxed">
+                    {isArabic 
+                      ? 'حدث خطأ أثناء الاتصال بـ Firebase Auth.' 
+                      : 'An error occurred while connecting to Firebase Auth.'}
+                    <div className="mt-2 font-mono text-[10px] text-red-700 bg-white p-2.5 rounded-xl border border-red-100/50 break-all max-h-24 overflow-y-auto text-left">
+                      Code: {authError?.code || 'N/A'}<br />
+                      Message: {authError?.message || String(authError)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Try Redirect Sign In as alternative */}
+              <div className="p-4 bg-indigo-50/30 border border-indigo-100/30 rounded-2xl space-y-2">
+                <h4 className="text-xs font-black text-indigo-950">
+                  {isArabic ? 'حل فوري بديل (عبر إعادة التوجيه):' : 'Instant Alternative (Redirect Sign-In):'}
+                </h4>
+                <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                  {isArabic 
+                    ? 'في بعض المتصفحات أو الأجهزة المحمولة، تنجح طريقة "إعادة التوجيه" عندما تفشل النوافذ المنبثقة. اضغط على الزر أدناه لتجربتها.'
+                    : 'In some mobile browsers or iframe contexts, the redirect method works when popups are blocked. Click below to try.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSignInRedirect}
+                  className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'تسجيل الدخول عبر إعادة التوجيه' : 'Try Redirect Sign-In'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAuthError(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs rounded-xl transition cursor-pointer"
+              >
+                {isArabic ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

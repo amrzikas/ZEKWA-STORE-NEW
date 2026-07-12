@@ -2,14 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Edit2, Trash2, ShieldAlert, DollarSign, Truck, Package, 
   Clock, CheckCircle, CreditCard, Lock, Unlock, Settings, Eye, 
-  RefreshCw, ClipboardList, Check, X, AlertCircle, Sparkles, LogOut, Sliders, Image as ImageIcon
+  RefreshCw, ClipboardList, Check, X, AlertCircle, Sparkles, LogOut, Sliders, Image as ImageIcon,
+  FileSpreadsheet, Download, Upload
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { motion } from 'framer-motion';
 import { 
   collection, doc, getDocs, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy 
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Product, Order, ShippingStatus, Category, Subcategory } from '../types';
+import { cleanUndefined } from '../utils';
 
 interface AdminDashboardProps {
   isArabic: boolean;
@@ -60,6 +63,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
   // Forms / Modal States
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   
   // New Product Form State
   const [productForm, setProductForm] = useState({
@@ -374,13 +378,172 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     };
 
     try {
-      await setDoc(doc(db, 'products', pId), finalProduct);
+      await setDoc(doc(db, 'products', pId), cleanUndefined(finalProduct));
       setShowProductModal(false);
       setEditingProduct(null);
       resetProductForm();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `products/${pId}`);
     }
+  };
+
+  // Excel Template Download Handler
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'ID (مثال: prod-1 أو اتركه فارغاً)': 'prod-example-1',
+        'Name (English)': 'Bespoke Oud Perfume',
+        'Name Ar (العربية)': 'عطر العود الملكي الفاخر',
+        'Description (English)': 'Premium organic scent with rich oriental notes.',
+        'Description Ar (العربية)': 'عطر عضوي فاخر بنفحات العود والمسك الشرقية المميزة.',
+        'Price (السعر بالريال)': 450,
+        'Category ID (معرّف الفئة)': 'apparel',
+        'Subcategory ID (معرّف الفئة الفرعية)': '',
+        'Stock (المخزون)': 15,
+        'Primary Image URL (رابط الصورة الأساسية)': 'https://images.unsplash.com/photo-1547887537-6158d64c35b3?q=80&w=600&auto=format&fit=crop',
+        'Additional Image URLs (روابط الصور الإضافية مفصولة بفاصلة ,)': 'https://images.unsplash.com/photo-1594035910387-fea47794261f?q=80&w=600&auto=format&fit=crop',
+        'Features En (الميزات بالإنجليزية مفصولة بـ |)': 'Pure organic ingredients|Lasts up to 24 hours|Artisan hand-blown bottle',
+        'Features Ar (الميزات بالعربية مفصولة بـ |)': 'مكونات عضوية نقية 100%|ثبات عالي يدوم لـ 24 ساعة|زجاجة مصممة يدوياً بعناية',
+        'Is Featured (مميز - TRUE أو FALSE)': 'TRUE'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products Template');
+
+    const wscols = [
+      { wch: 25 }, // ID
+      { wch: 25 }, // Name En
+      { wch: 25 }, // Name Ar
+      { wch: 35 }, // Desc En
+      { wch: 35 }, // Desc Ar
+      { wch: 15 }, // Price
+      { wch: 15 }, // Category
+      { wch: 18 }, // Subcategory
+      { wch: 12 }, // Stock
+      { wch: 40 }, // Image
+      { wch: 40 }, // Images
+      { wch: 30 }, // Features En
+      { wch: 30 }, // Features Ar
+      { wch: 15 }, // Featured
+    ];
+    ws['!cols'] = wscols;
+
+    XLSX.writeFile(wb, 'zewka_products_template.xlsx');
+  };
+
+  // Excel File Upload Parser & Firestore Bulk Import
+  const handleUploadExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = evt.target?.result;
+        if (!data) throw new Error('Could not read file data');
+
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        if (jsonData.length === 0) {
+          alert(isArabic ? 'ملف الاكسيل فارغ!' : 'Excel file is empty!');
+          return;
+        }
+
+        let importedCount = 0;
+        let errorCount = 0;
+
+        for (const row of jsonData) {
+          const idRaw = row['ID (مثال: prod-1 أو اتركه فارغاً)'] || row['ID'] || row['معرف المنتج'];
+          const id = idRaw ? String(idRaw).trim().toLowerCase().replace(/\s+/g, '_') : `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          
+          const name = row['Name (English)'] || row['Name'] || row['الاسم بالإنجليزية'];
+          const nameAr = row['Name Ar (العربية)'] || row['NameAr'] || row['الاسم بالعربية'];
+          
+          if (!name || !nameAr) {
+            errorCount++;
+            continue; // Name En and Name Ar are required fields
+          }
+
+          const description = row['Description (English)'] || row['Description'] || '';
+          const descriptionAr = row['Description Ar (العربية)'] || row['DescriptionAr'] || '';
+          
+          const priceRaw = row['Price (السعر بالريال)'] || row['Price'] || row['السعر'];
+          const price = Number(priceRaw || 0);
+
+          const categoryId = row['Category ID (معرّف الفئة)'] || row['Category'] || 'apparel';
+          const subcategoryId = row['Subcategory ID (معرّف الفئة الفرعية)'] || row['Subcategory'] || '';
+          
+          const stockRaw = row['Stock (المخزون)'] || row['Stock'] || 10;
+          const stock = Number(stockRaw);
+
+          const image = row['Primary Image URL (رابط الصورة الأساسية)'] || row['Image'] || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff';
+          
+          const rawImages = row['Additional Image URLs (روابط الصور الإضافية مفصولة بفاصلة ,)'] || row['Images'] || '';
+          const imagesList = rawImages ? String(rawImages).split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+          if (image && !imagesList.includes(image)) {
+            imagesList.unshift(image);
+          }
+
+          const rawFeatures = row['Features En (الميزات بالإنجليزية مفصولة بـ |)'] || row['Features'] || '';
+          const features = rawFeatures ? String(rawFeatures).split('|').map((s: string) => s.trim()).filter(Boolean) : [];
+
+          const rawFeaturesAr = row['Features Ar (الميزات بالعربية مفصولة بـ |)'] || row['FeaturesAr'] || '';
+          const featuresAr = rawFeaturesAr ? String(rawFeaturesAr).split('|').map((s: string) => s.trim()).filter(Boolean) : [];
+
+          const isFeaturedStr = String(row['Is Featured (مميز - TRUE أو FALSE)'] || row['IsFeatured'] || '').toUpperCase();
+          const isFeatured = isFeaturedStr === 'TRUE' || isFeaturedStr === 'YES' || isFeaturedStr === 'نعم';
+
+          // Automatically derive Arabic Category and Subcategory strings
+          const matchedCat = categories.find(c => c.id === categoryId);
+          const categoryAr = matchedCat ? matchedCat.nameAr : 'أخرى';
+          const matchedSub = matchedCat?.subcategories?.find(s => s.id === subcategoryId);
+          const subcategoryAr = matchedSub ? matchedSub.nameAr : '';
+
+          const finalProduct: Product = {
+            id,
+            name: String(name),
+            nameAr: String(nameAr),
+            description: String(description),
+            descriptionAr: String(descriptionAr),
+            price,
+            category: categoryId,
+            categoryAr,
+            subcategory: subcategoryId || undefined,
+            subcategoryAr: subcategoryAr || undefined,
+            rating: 5,
+            reviewsCount: 0,
+            image,
+            images: imagesList.length > 0 ? imagesList : [image],
+            features,
+            featuresAr,
+            specs: {},
+            specsAr: {},
+            stock,
+            isFeatured,
+          };
+
+          await setDoc(doc(db, 'products', id), cleanUndefined(finalProduct));
+          importedCount++;
+        }
+
+        alert(isArabic 
+          ? `🎉 تم استيراد ${importedCount} منتج بنجاح إلى الفايرستور! الأخطاء المتخطاة: ${errorCount}`
+          : `🎉 Successfully imported ${importedCount} products to Firestore! Skipped errors: ${errorCount}`
+        );
+        
+        // Reset file input
+        e.target.value = '';
+      } catch (err) {
+        console.error(err);
+        alert(isArabic ? '❌ فشل تحليل ملف Excel. يرجى التأكد من صياغة وتنسيق خلايا الجدول.' : '❌ Failed to parse Excel file. Please ensure cells layout is correct.');
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   const resetProductForm = () => {
@@ -443,8 +606,103 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     if (!confirm(isArabic ? 'هل أنت متأكد من حذف هذا المنتج نهائياً؟' : 'Are you sure you want to permanently delete this product?')) return;
     try {
       await deleteDoc(doc(db, 'products', id));
+      setSelectedProductIds(prev => prev.filter(pId => pId !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `products/${id}`);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!requireAdminAccess()) return;
+    if (selectedProductIds.length === 0) return;
+
+    const confirmMsg = isArabic 
+      ? `هل أنت متأكد من رغبتك في حذف ${selectedProductIds.length} منتجاً محدداً نهائياً؟` 
+      : `Are you sure you want to permanently delete ${selectedProductIds.length} selected products?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const deletePromises = selectedProductIds.map(id => deleteDoc(doc(db, 'products', id)));
+      await Promise.all(deletePromises);
+      setSelectedProductIds([]);
+      alert(isArabic ? 'تم حذف المنتجات المحددة بنجاح!' : 'Selected products deleted successfully!');
+    } catch (error) {
+      console.error(error);
+      alert(isArabic ? 'حدث خطأ أثناء محاولة حذف بعض المنتجات.' : 'An error occurred while deleting products.');
+    }
+  };
+
+  const handleBulkToggleFeatured = async (isFeatured: boolean) => {
+    if (!requireAdminAccess()) return;
+    if (selectedProductIds.length === 0) return;
+
+    try {
+      const updatePromises = selectedProductIds.map(id => updateDoc(doc(db, 'products', id), { isFeatured }));
+      await Promise.all(updatePromises);
+      setSelectedProductIds([]);
+      alert(isArabic ? 'تم تحديث حالة تمييز المنتجات بنجاح!' : 'Products featured status updated successfully!');
+    } catch (error) {
+      console.error(error);
+      alert(isArabic ? 'حدث خطأ أثناء تحديث المنتجات.' : 'An error occurred while updating products.');
+    }
+  };
+
+  const handleBulkUpdateStock = async () => {
+    if (!requireAdminAccess()) return;
+    if (selectedProductIds.length === 0) return;
+
+    const promptMsg = isArabic 
+      ? 'أدخل قيمة المخزون الجديدة للمنتجات المحددة:' 
+      : 'Enter the new stock quantity for selected products:';
+    const input = window.prompt(promptMsg);
+    if (input === null) return;
+    const newStock = parseInt(input, 10);
+    if (isNaN(newStock) || newStock < 0) {
+      alert(isArabic ? 'الرجاء إدخال رقم صحيح وموجب!' : 'Please enter a valid non-negative number!');
+      return;
+    }
+
+    try {
+      const updatePromises = selectedProductIds.map(id => updateDoc(doc(db, 'products', id), { stock: newStock }));
+      await Promise.all(updatePromises);
+      setSelectedProductIds([]);
+      alert(isArabic ? 'تم تحديث مخزون المنتجات بنجاح!' : 'Product stock updated successfully!');
+    } catch (error) {
+      console.error(error);
+      alert(isArabic ? 'حدث خطأ أثناء تحديث المخزون.' : 'An error occurred while updating stock.');
+    }
+  };
+
+  const handleBulkChangeCategory = async (categoryId: string) => {
+    if (!categoryId) return;
+    if (!requireAdminAccess()) return;
+    if (selectedProductIds.length === 0) return;
+
+    const matchedCat = categories.find(c => c.id === categoryId);
+    if (!matchedCat) return;
+
+    const categoryAr = matchedCat.nameAr || 'أخرى';
+
+    const confirmMsg = isArabic
+      ? `هل تريد نقل ${selectedProductIds.length} منتجاً إلى الفئة "${matchedCat.nameAr}"؟`
+      : `Do you want to move ${selectedProductIds.length} products to category "${matchedCat.name}"?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const updatePromises = selectedProductIds.map(id => 
+        updateDoc(doc(db, 'products', id), { 
+          category: categoryId,
+          categoryAr: categoryAr,
+          subcategory: '',
+          subcategoryAr: ''
+        })
+      );
+      await Promise.all(updatePromises);
+      setSelectedProductIds([]);
+      alert(isArabic ? 'تم نقل المنتجات للفئة الجديدة بنجاح!' : 'Products moved to the new category successfully!');
+    } catch (error) {
+      console.error(error);
+      alert(isArabic ? 'حدث خطأ أثناء تغيير فئة المنتجات.' : 'An error occurred while changing product categories.');
     }
   };
 
@@ -964,72 +1222,241 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                     </button>
                   </div>
 
+                  {/* Excel Bulk Import / Export Control Panel */}
+                  <div className="bg-slate-50 border-2 border-slate-100/60 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl font-black">
+                        <FileSpreadsheet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-800">
+                          {isArabic ? 'إضافة المنتجات عبر ملف إكسيل (XLSX)' : 'Bulk Import Products via Excel (XLSX)'}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-bold">
+                          {isArabic 
+                            ? 'قم بتحميل ملف النموذج، وتعبئته ببيانات منتجاتك الفاخرة، ثم ارفع الملف لتسجيلها سحابياً بالكامل.' 
+                            : 'Download our standard spreadsheet template, fill it with your luxury items data, and upload to sync on cloud.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleDownloadTemplate}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 text-slate-600 text-[11px] font-black rounded-xl transition cursor-pointer shadow-sm"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>{isArabic ? 'تحميل نموذج Excel' : 'Download Template'}</span>
+                      </button>
+
+                      <label className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-black rounded-xl transition cursor-pointer shadow-sm border border-indigo-100/50">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isArabic ? 'رفع الملف المعبأ' : 'Upload Spreadsheet'}</span>
+                        <input
+                          type="file"
+                          accept=".xlsx, .xls"
+                          onChange={handleUploadExcel}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
                   {products.length === 0 ? (
                     <div className="border-2 border-dashed border-slate-100 rounded-3xl p-12 text-center">
                       <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                       <p className="text-xs font-black text-slate-400">{isArabic ? 'كتالوج المنتجات فارغ حالياً في السحابة. أضف المنتجات من خلال Firestore أو من لوحة الإدارة.' : 'No cloud products found. Add products from Firestore or the admin panel.'}</p>
                     </div>
                   ) : (
-                    <div className="bg-white border-2 border-slate-50 rounded-2xl overflow-hidden shadow-sm">
-                      <table className="w-full text-xs text-slate-600" style={{ textAlign: isArabic ? 'right' : 'left' }}>
-                        <thead className="bg-slate-50 font-black text-slate-500 uppercase tracking-wider">
-                          <tr>
-                            <th className="px-4 py-3">{isArabic ? 'المنتج' : 'Product'}</th>
-                            <th className="px-4 py-3">{isArabic ? 'الفئة' : 'Category'}</th>
-                            <th className="px-4 py-3 text-center">{isArabic ? 'السعر' : 'Price'}</th>
-                            <th className="px-4 py-3 text-center">{isArabic ? 'المخزون' : 'Stock'}</th>
-                            <th className="px-4 py-3 text-center">{isArabic ? 'التقييم' : 'Rating'}</th>
-                            <th className="px-4 py-3 text-center">{isArabic ? 'خيارات' : 'Options'}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-bold">
-                          {products.map((prod) => (
-                            <tr key={prod.id} className="hover:bg-slate-50/50 transition">
-                              <td className="px-4 py-3 flex items-center gap-3">
-                                <img src={prod.image} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100" referrerPolicy="no-referrer" />
-                                <div>
-                                  <p className="font-black text-slate-800">{isArabic ? prod.nameAr : prod.name}</p>
-                                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">{prod.id}</p>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase">
-                                  {isArabic ? prod.categoryAr : prod.category}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-center font-black text-slate-800">
-                                {prod.price} {isArabic ? 'ر.س' : 'SAR'}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <span className={`px-2 py-0.5 rounded-lg text-[10px] ${prod.stock === 0 ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
-                                  {prod.stock} {isArabic ? 'قطع' : 'pcs'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-center text-amber-500 font-black">
-                                ★ {prod.rating}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleEditProduct(prod)}
-                                    className="p-1.5 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 rounded-lg transition"
-                                    title={isArabic ? 'تعديل المنتج' : 'Edit Product'}
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteProduct(prod.id)}
-                                    className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition"
-                                    title={isArabic ? 'حذف المنتج' : 'Delete Product'}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
+                    <div className="space-y-4">
+                      {selectedProductIds.length > 0 && (
+                        <div className="bg-indigo-50 border-2 border-indigo-100/50 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-indigo-600 text-white rounded-xl">
+                              <Package className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-indigo-950">
+                                {isArabic 
+                                  ? `تم تحديد ${selectedProductIds.length} من المنتجات` 
+                                  : `${selectedProductIds.length} products selected`}
+                              </h4>
+                              <p className="text-[10px] text-indigo-500 font-bold mt-0.5">
+                                {isArabic 
+                                  ? 'اختر أحد الإجراءات الجماعية لتطبيقها على كافة المنتجات المحددة:' 
+                                  : 'Select a bulk action to apply on all selected products:'}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                            {/* Bulk Delete */}
+                            <button
+                              type="button"
+                              onClick={handleBulkDelete}
+                              className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>{isArabic ? 'حذف المحدد' : 'Delete Selected'}</span>
+                            </button>
+
+                            {/* Bulk Stock */}
+                            <button
+                              type="button"
+                              onClick={handleBulkUpdateStock}
+                              className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Sliders className="w-3.5 h-3.5" />
+                              <span>{isArabic ? 'تعديل المخزون' : 'Set Stock'}</span>
+                            </button>
+
+                            {/* Bulk Feature */}
+                            <button
+                              type="button"
+                              onClick={() => handleBulkToggleFeatured(true)}
+                              className="px-3 py-2 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                              <span>{isArabic ? 'تمييز المحدد' : 'Feature'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleBulkToggleFeatured(false)}
+                              className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>{isArabic ? 'إلغاء التمييز' : 'Unfeature'}</span>
+                            </button>
+
+                            {/* Bulk Category dropdown */}
+                            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-sm">
+                              <span className="text-[9px] text-slate-400 font-black whitespace-nowrap">
+                                {isArabic ? 'نقل إلى:' : 'Move to:'}
+                              </span>
+                              <select
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val) {
+                                    handleBulkChangeCategory(val);
+                                    e.target.value = '';
+                                  }
+                                }}
+                                className="bg-transparent border-none text-[10px] text-indigo-600 font-black focus:outline-none focus:ring-0 cursor-pointer p-0"
+                                defaultValue=""
+                              >
+                                <option value="" disabled>{isArabic ? 'الفئة...' : 'Category...'}</option>
+                                {categories.map(c => (
+                                  <option key={c.id} value={c.id}>{isArabic ? c.nameAr : c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Deselect All */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedProductIds([])}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                              title={isArabic ? 'إلغاء التحديد' : 'Deselect All'}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-white border-2 border-slate-50 rounded-2xl overflow-hidden shadow-sm">
+                        <table className="w-full text-xs text-slate-600" style={{ textAlign: isArabic ? 'right' : 'left' }}>
+                          <thead className="bg-slate-50 font-black text-slate-500 uppercase tracking-wider">
+                            <tr>
+                              <th className="px-4 py-3 w-10 text-center">
+                                <input 
+                                  type="checkbox"
+                                  checked={selectedProductIds.length === products.length && products.length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedProductIds(products.map(p => p.id));
+                                    } else {
+                                      setSelectedProductIds([]);
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                              </th>
+                              <th className="px-4 py-3" style={{ textAlign: isArabic ? 'right' : 'left' }}>{isArabic ? 'المنتج' : 'Product'}</th>
+                              <th className="px-4 py-3" style={{ textAlign: isArabic ? 'right' : 'left' }}>{isArabic ? 'الفئة' : 'Category'}</th>
+                              <th className="px-4 py-3 text-center">{isArabic ? 'السعر' : 'Price'}</th>
+                              <th className="px-4 py-3 text-center">{isArabic ? 'المخزون' : 'Stock'}</th>
+                              <th className="px-4 py-3 text-center">{isArabic ? 'التقييم' : 'Rating'}</th>
+                              <th className="px-4 py-3 text-center">{isArabic ? 'خيارات' : 'Options'}</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-bold">
+                            {products.map((prod) => {
+                              const isChecked = selectedProductIds.includes(prod.id);
+                              return (
+                                <tr key={prod.id} className={`hover:bg-slate-50/50 transition ${isChecked ? 'bg-indigo-50/30' : ''}`}>
+                                  <td className="px-4 py-3 w-10 text-center">
+                                    <input 
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedProductIds(prev => [...prev, prod.id]);
+                                        } else {
+                                          setSelectedProductIds(prev => prev.filter(id => id !== prod.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 flex items-center gap-3">
+                                    <img src={prod.image} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100" referrerPolicy="no-referrer" />
+                                    <div>
+                                      <p className="font-black text-slate-800">{isArabic ? prod.nameAr : prod.name}</p>
+                                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{prod.id}</p>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase">
+                                      {isArabic ? prod.categoryAr : prod.category}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-black text-slate-800">
+                                    {prod.price} {isArabic ? 'ر.س' : 'SAR'}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded-lg text-[10px] ${prod.stock === 0 ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                                      {prod.stock} {isArabic ? 'قطع' : 'pcs'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-amber-500 font-black">
+                                    ★ {prod.rating}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        onClick={() => handleEditProduct(prod)}
+                                        className="p-1.5 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 rounded-lg transition"
+                                        title={isArabic ? 'تعديل المنتج' : 'Edit Product'}
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteProduct(prod.id)}
+                                        className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition"
+                                        title={isArabic ? 'حذف المنتج' : 'Delete Product'}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2435,6 +2862,41 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {!editingProduct && (
+              <div className="p-3 bg-emerald-50/50 border border-emerald-100/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2">
+                  <FileSpreadsheet className="w-4.5 h-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-black text-slate-800">{isArabic ? 'هل تريد استيراد كتالوج منتجات كامل؟' : 'Bulk import products via Excel?'}</p>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{isArabic ? 'حمّل نموذج الإكسيل الفارغ، قم بتعبئته ثم أعد رفعه هنا دفعة واحدة.' : 'Download our blank XLSX template, fill it with items, and upload here.'}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto shrink-0 justify-end">
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-200 rounded-xl text-[10px] font-black cursor-pointer shadow-sm transition"
+                  >
+                    <Download className="w-3 h-3 inline-block mr-1 align-middle" />
+                    <span>{isArabic ? 'تحميل النموذج' : 'Download'}</span>
+                  </button>
+                  <label className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black cursor-pointer shadow-sm flex items-center gap-1 transition text-center justify-center">
+                    <Upload className="w-3 h-3" />
+                    <span>{isArabic ? 'رفع الملف' : 'Upload'}</span>
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      onChange={(e) => {
+                        handleUploadExcel(e);
+                        setShowProductModal(false);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleProductSubmit} className="space-y-4 text-xs font-bold text-slate-600">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

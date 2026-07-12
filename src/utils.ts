@@ -82,3 +82,28 @@ export function matchProductSubcategory(
   return false;
 }
 
+/**
+ * Recursively removes all undefined fields from an object.
+ * Firestore throws errors if we try to write undefined properties.
+ */
+export function cleanUndefined<T extends object>(obj: T): T {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  
+  const clean = (Array.isArray(obj) ? [] : {}) as any;
+  
+  Object.keys(obj).forEach((key) => {
+    const value = (obj as any)[key];
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object') {
+        clean[key] = cleanUndefined(value);
+      } else {
+        clean[key] = value;
+      }
+    }
+  });
+  
+  return clean;
+}
+

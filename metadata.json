@@ -1,6 +1,6 @@
 {
   "name": "ZEWKA Store",
-  "description": "An elegant, luxurious full-stack e-commerce experience named ZEWKA featuring dynamic curated products, an intelligent AI style consultant, custom interactive customer reviews, a promotional discount wheel, and a complete multi-step checkout wizard.",
+  "description": "ZEWKA Store is an elegant, highly SEO-optimized, luxurious full-stack e-commerce experience featuring dynamic curated products, an intelligent AI style consultant, custom interactive reviews, a dynamic discount wheel, and a multi-step checkout wizard.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
