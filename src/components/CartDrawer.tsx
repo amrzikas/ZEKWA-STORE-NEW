@@ -3,7 +3,7 @@ import { X, Plus, Minus, Trash2, Ticket, Gift, Sparkles, Check, ChevronRight } f
 import { motion, AnimatePresence } from 'motion/react';
 import { CartItem } from '../types';
 import { COUPONS } from '../data';
-import { formatPrice } from '../utils';
+import { formatPrice, isProductOnOffer } from '../utils';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -36,7 +36,7 @@ export default function CartDrawer({
   const [hasSpun, setHasSpun] = useState(false);
   const [wonCoupon, setWonCoupon] = useState('');
 
-  const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + (isProductOnOffer(item.product) && item.product.discountPrice ? item.product.discountPrice : item.product.price) * item.quantity, 0);
   const freeShippingThreshold = 150;
   const shippingCost = subtotal >= freeShippingThreshold || subtotal === 0 ? 0 : 25;
   const discountAmount = subtotal * discountRate;
@@ -188,9 +188,22 @@ export default function CartDrawer({
                               </div>
 
                               {/* Price */}
-                              <span className="text-xs font-bold font-mono text-[#1D1D1C]">
-                                {formatPrice(item.product.price * item.quantity, currency, isArabic)}
-                              </span>
+                              <div className="flex flex-col items-end">
+                                {isProductOnOffer(item.product) && item.product.discountPrice ? (
+                                  <>
+                                    <span className="text-xs font-bold font-mono text-rose-600">
+                                      {formatPrice(item.product.discountPrice * item.quantity, currency, isArabic)}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 line-through font-mono">
+                                      {formatPrice(item.product.price * item.quantity, currency, isArabic)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-xs font-bold font-mono text-[#1D1D1C]">
+                                    {formatPrice(item.product.price * item.quantity, currency, isArabic)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>

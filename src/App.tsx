@@ -9,9 +9,10 @@ import CheckoutWizard from './components/CheckoutWizard';
 import AiAssistant from './components/AiAssistant';
 import OrdersHistory from './components/OrdersHistory';
 import AllCollection from './components/AllCollection';
+import OffersPage from './components/OffersPage';
 
 import { CartItem, Product, Review, Order, ShippingStatus, Category } from './types';
-import { matchProductCategory, cleanUndefined } from './utils';
+import { matchProductCategory, cleanUndefined, isProductOnOffer } from './utils';
 import { Facebook, Instagram, Twitter, AlertTriangle, X, ExternalLink, Copy, Check } from 'lucide-react';
 
 // Firebase Imports
@@ -21,7 +22,7 @@ import { auth, db, googleProvider, handleFirestoreError, OperationType } from '.
 import AdminDashboard from './components/AdminDashboard';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin'>('home');
+  const [view, setView] = useState<'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin' | 'offers'>('home');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Real mobile screen detection (independent of the viewport scale)
@@ -806,6 +807,107 @@ export default function App() {
               </div>
             </div>
 
+            {/* Summer 2026 Exclusive Campaign Ad Block */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              <div 
+                className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
+                style={{ direction: isArabic ? 'rtl' : 'ltr' }}
+              >
+                {/* Promo Card 1: Main Banner */}
+                <div className="lg:col-span-8 bg-slate-950 text-white rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-xl border border-white/5">
+                  <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/60 to-transparent z-10 animate-fade-in" />
+                  <img 
+                    src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop"
+                    alt="Summer Campaign"
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 hover:scale-110 transition-transform duration-[8s]"
+                    referrerPolicy="no-referrer"
+                  />
+                  
+                  <div className="relative z-20 space-y-4 max-w-md">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600/95 text-white text-[10px] font-black tracking-widest rounded-full uppercase">
+                      {isArabic ? 'حملة صيف 2026 الكبرى' : 'SUMMER 2026 LAUNCH'}
+                    </span>
+                    <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight uppercase font-sans">
+                      {isArabic ? 'خصومات تصل إلى 50%' : 'Elevate Your Season Up to 50% Off'}
+                    </h2>
+                    <p className="text-xs text-slate-300 leading-relaxed font-bold">
+                      {isArabic 
+                        ? 'انغمس في عالم الأناقة الصيفية الحصرية مع أسعار مذهلة مصممة للذوق الرفيع والمقتنيات المحدودة.' 
+                        : 'Immerse in fine luxury coordinates with unbelievable markdowns tailored for the elite connoisseur.'}
+                    </p>
+                  </div>
+
+                  <div className="relative z-20 pt-6">
+                    <button
+                      onClick={() => {
+                        setView('offers');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-6 py-3 bg-white hover:bg-rose-50 text-slate-900 text-xs font-black rounded-xl transition shadow-lg cursor-pointer flex items-center gap-2"
+                    >
+                      <span>{isArabic ? 'اكتشف عروض الصيف الآن' : 'Explore Summer Offers'}</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Promo Card 2: Interactive Countdown/Teaser */}
+                <div className="lg:col-span-4 bg-gradient-to-br from-rose-950 via-[#2E0B11] to-[#140205] text-white rounded-[2.5rem] p-8 relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-xl border border-rose-500/10">
+                  <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-rose-600/25 blur-2xl pointer-events-none" />
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black tracking-widest text-rose-400 uppercase">
+                        {isArabic ? 'عرض محدود' : 'TIME-LIMITED CURATION'}
+                      </span>
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl font-black font-sans leading-snug">
+                      {isArabic ? 'الكتالوج المصغر الحصري صيف 2026' : 'Summer 2026 Select Curation'}
+                    </h3>
+                    
+                    <p className="text-[11px] text-rose-200/80 leading-relaxed font-semibold">
+                      {isArabic 
+                        ? 'تصنيفات فريدة مختارة بعناية فائقة تم إضافتها وتحديثها للتو بأسعار ترويجية مخصصة.' 
+                        : 'Premium selections of haute apparel, luxury items, and bespoke accessories with direct summer discounts.'}
+                    </p>
+                  </div>
+
+                  <div className="pt-6 space-y-4">
+                    {/* Visual countdown mimic */}
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-2.5">
+                        <div className="text-base font-black font-mono">2026</div>
+                        <div className="text-[9px] text-rose-300 font-bold uppercase">{isArabic ? 'الصيف' : 'SUMMER'}</div>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-2.5">
+                        <div className="text-base font-black font-mono text-rose-400">HOT</div>
+                        <div className="text-[9px] text-rose-300 font-bold uppercase">{isArabic ? 'الحملة' : 'CAMPAIGN'}</div>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-2.5">
+                        <div className="text-base font-black font-mono text-emerald-400">LIVE</div>
+                        <div className="text-[9px] text-rose-300 font-bold uppercase">{isArabic ? 'الحالة' : 'STATUS'}</div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setView('offers');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl shadow-lg shadow-rose-600/20 transition cursor-pointer text-center block"
+                    >
+                      {isArabic ? 'تصفح الكتالوج الخاص' : 'Open Summer Catalog'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Category Showcase Sections - Dynamic from Firestore */}
             {categories.map((cat, idx) => {
               const catProducts = products.filter(p => matchProductCategory(p, cat.id, categories));
@@ -986,92 +1088,7 @@ export default function App() {
               );
             })}
 
-            {/* Experience Bento Block */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div 
-                className="bg-slate-900 text-white rounded-[3rem] p-8 md:p-14 overflow-hidden relative shadow-2xl animate-fade-in"
-                style={{ direction: isArabic ? 'rtl' : 'ltr' }}
-              >
-                <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
-                <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none" />
 
-                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-                  <div className="lg:col-span-5 space-y-5 text-center lg:text-start">
-                    <span className="text-[10px] font-black tracking-widest text-indigo-400 uppercase bg-indigo-950/60 px-3.5 py-1.5 rounded-full border border-indigo-500/20">
-                      {isArabic ? 'فلسفة بوتيك زيوكا' : 'The ZEWKA Philosophy'}
-                    </span>
-                    <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-                      {isArabic ? 'الفخامة الهادئة بلمسة معاصرة غنية' : 'Quiet Luxury with Modern Refinement'}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-lg mx-auto lg:mx-0 font-medium">
-                      {isArabic 
-                        ? 'في زيوكا، نحن لا نبيع مجرد مقتنيات. نحن نصمم تجارب جمالية متكاملة تضفي طابعاً من الرقي والأصالة على تفاصيل حياتك اليومية، من الملابس المنتقاة بعناية لخطوط العناية العضوية الفريدة.'
-                        : 'At ZEWKA, we define lifestyle coordinates. We cultivate custom aesthetic coordinates to reflect modern quiet luxury, handcrafted with meticulous tailoring and care.'}
-                    </p>
-                    <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-                      <button
-                        onClick={() => {
-                          setSelectedCategory('all');
-                          setView('catalog');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-600/30 cursor-pointer transition-colors"
-                      >
-                        {isArabic ? 'ابدأ التسوق الفاخر' : 'Start Luxe Shopping'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          const trigger = document.getElementById('ai-trigger-button');
-                          if (trigger) trigger.click();
-                        }}
-                        className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black rounded-xl cursor-pointer transition-colors border border-slate-700"
-                      >
-                        {isArabic ? 'استشارة المساعد الذكي' : 'Consult AI Stylist'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    {[
-                      {
-                        titleAr: 'حرفية إيطالية يدوية',
-                        titleEn: 'Italian Craftsmanship',
-                        descAr: 'حياكة يدوية دقيقة وتفاصيل تعيش لأجيال متعاقبة.',
-                        descEn: 'Meticulous details and fine tailoring to endure generations.',
-                        icon: '🧵'
-                      },
-                      {
-                        titleAr: 'مواد عضوية 100%',
-                        titleEn: 'Organic Materials',
-                        descAr: 'صوف ميرينو طبيعي، زيوت مستخلصة نقية، وسيراميك يدوي صحي.',
-                        descEn: 'Pure merino fabrics, distilled natural aromatic oils.',
-                        icon: '🌿'
-                      },
-                      {
-                        titleAr: 'توصيل عابر للحدود',
-                        titleEn: 'Express Logistics',
-                        descAr: 'تغليف هدايا فاخر وشحن جوي آمن مع تتبع ذكي متكامل.',
-                        descEn: 'Premium luxury packaging and fully tracked courier.',
-                        icon: '✈️'
-                      }
-                    ].map((item, index) => (
-                      <div 
-                        key={index} 
-                        className="p-6 bg-slate-800/40 rounded-2xl border border-slate-800 hover:border-slate-700/80 transition-all duration-300"
-                      >
-                        <span className="text-3xl block mb-4">{item.icon}</span>
-                        <h4 className="text-sm font-black mb-1.5">
-                          {isArabic ? item.titleAr : item.titleEn}
-                        </h4>
-                        <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-                          {isArabic ? item.descAr : item.descEn}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1122,13 +1139,25 @@ export default function App() {
         {view === 'checkout' && (
           <CheckoutWizard
             cart={cart}
-            subtotal={cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)}
+            subtotal={cart.reduce((sum, item) => sum + (isProductOnOffer(item.product) && item.product.discountPrice ? item.product.discountPrice : item.product.price) * item.quantity, 0)}
             discountRate={0}
             couponCode=""
             onComplete={handleCompleteCheckout}
             onCancel={() => setView('catalog')}
             isArabic={isArabic}
             currency={storeSettings.currency}
+          />
+        )}
+
+        {view === 'offers' && (
+          <OffersPage
+            products={products}
+            categories={categories}
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={handleAddToCart}
+            isArabic={isArabic}
+            currency={storeSettings.currency}
+            onBackToHome={() => setView('home')}
           />
         )}
 

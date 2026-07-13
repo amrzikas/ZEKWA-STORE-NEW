@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Search, ClipboardList, Globe, Sparkles, ChevronDown, User as UserIcon, LogOut } from 'lucide-react';
+import { ShoppingBag, Search, ClipboardList, Globe, Sparkles, ChevronDown, User as UserIcon, LogOut, Percent } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CartItem, Category } from '../types';
 
@@ -15,8 +15,8 @@ interface HeaderProps {
   onSubcategoryChange?: (subcategory: string) => void;
   isArabic: boolean;
   onToggleLang: () => void;
-  currentView: 'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin';
-  onViewChange: (view: 'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin') => void;
+  currentView: 'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin' | 'offers';
+  onViewChange: (view: 'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin' | 'offers') => void;
   user: any;
   onSignIn: () => void;
   onSignOut: () => void;
@@ -216,6 +216,20 @@ export default function Header({
                 {isArabic ? 'الرئيسية' : 'HOME'}
               </button>
 
+              <button
+                onClick={() => onViewChange('offers')}
+                className={`text-xs font-black tracking-wider transition-all duration-300 cursor-pointer py-1.5 px-3 rounded-xl flex items-center gap-1.5 ${
+                  currentView === 'offers'
+                    ? 'text-rose-600 bg-rose-50 font-black shadow-sm'
+                    : isHome
+                      ? 'text-rose-400 hover:text-rose-300 hover:bg-white/5 font-bold'
+                      : 'text-rose-500 hover:text-rose-600 hover:bg-rose-50/50'
+                }`}
+              >
+                <Percent className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                <span>{isArabic ? 'العروض الخاصة' : 'OFFERS'}</span>
+              </button>
+
               {user?.email?.toLowerCase() === 'amrzikas20@gmail.com' && (
                 <button
                   onClick={() => onViewChange('admin')}
@@ -248,6 +262,22 @@ export default function Header({
                 }`}
               >
                 {isArabic ? 'الصفحة الرئيسية' : 'Home'}
+              </button>
+
+              <button
+                onClick={() => onViewChange('offers')}
+                className={`text-xs font-bold pb-1 transition-all cursor-pointer flex items-center gap-1 ${
+                  currentView === 'offers'
+                    ? isHome
+                      ? 'text-rose-400 border-b-2 border-rose-400 font-black'
+                      : 'text-rose-600 border-b-2 border-rose-600 font-black'
+                    : isHome
+                      ? 'text-rose-400'
+                      : 'text-rose-500'
+                }`}
+              >
+                <Percent className="w-3.5 h-3.5" />
+                <span>{isArabic ? 'العروض' : 'Offers'}</span>
               </button>
 
               {user?.email?.toLowerCase() === 'amrzikas20@gmail.com' && (

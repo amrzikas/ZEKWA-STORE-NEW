@@ -25,7 +25,11 @@
         "price": { "type": "number" },
         "image": { "type": "string" },
         "category": { "type": "string" },
-        "stock": { "type": "number" }
+        "stock": { "type": "number" },
+        "isOnOffer": { "type": "boolean" },
+        "discountPrice": { "type": "number" },
+        "offerStartDate": { "type": "string" },
+        "offerEndDate": { "type": "string" }
       },
       "required": ["id", "name", "nameAr", "price", "image", "category"]
     },
@@ -115,6 +119,10 @@
         "specsAr": { "type": "object" },
         "stock": { "type": "number" },
         "isFeatured": { "type": "boolean" },
+        "isOnOffer": { "type": "boolean" },
+        "discountPrice": { "type": "number" },
+        "offerStartDate": { "type": "string" },
+        "offerEndDate": { "type": "string" },
         "shippingPlanId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },

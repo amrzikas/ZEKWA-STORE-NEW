@@ -32,6 +32,10 @@ export interface Product {
   specs: Record<string, string>;
   specsAr: Record<string, string>;
   isFeatured?: boolean;
+  isOnOffer?: boolean;
+  discountPrice?: number;
+  offerStartDate?: string;
+  offerEndDate?: string;
   stock: number;
   shippingPlanId?: string;
 }

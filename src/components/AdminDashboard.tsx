@@ -83,6 +83,10 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
     features: '',
     featuresAr: '',
     isFeatured: false,
+    isOnOffer: false,
+    discountPrice: 0,
+    offerStartDate: '',
+    offerEndDate: '',
     shippingPlanId: '',
   });
 
@@ -374,6 +378,10 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       specsAr: editingProduct ? editingProduct.specsAr : {},
       stock: Number(productForm.stock),
       isFeatured: !!productForm.isFeatured,
+      isOnOffer: !!productForm.isOnOffer,
+      discountPrice: productForm.isOnOffer ? Number(productForm.discountPrice) : undefined,
+      offerStartDate: productForm.isOnOffer ? productForm.offerStartDate || undefined : undefined,
+      offerEndDate: productForm.isOnOffer ? productForm.offerEndDate || undefined : undefined,
       shippingPlanId: productForm.shippingPlanId || undefined
     };
 
@@ -564,6 +572,10 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       features: '',
       featuresAr: '',
       isFeatured: false,
+      isOnOffer: false,
+      discountPrice: 0,
+      offerStartDate: '',
+      offerEndDate: '',
       shippingPlanId: '',
     });
   };
@@ -596,6 +608,10 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
       features: prod.features ? prod.features.join('\n') : '',
       featuresAr: prod.featuresAr ? prod.featuresAr.join('\n') : '',
       isFeatured: !!prod.isFeatured,
+      isOnOffer: !!prod.isOnOffer,
+      discountPrice: prod.discountPrice || 0,
+      offerStartDate: prod.offerStartDate || '',
+      offerEndDate: prod.offerEndDate || '',
       shippingPlanId: prod.shippingPlanId || '',
     });
     setShowProductModal(true);
@@ -2901,7 +2917,7 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
             <form onSubmit={handleProductSubmit} className="space-y-4 text-xs font-bold text-slate-600">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Featured Products Toggle checkbox */}
-                <div className="md:col-span-2 flex items-center gap-3 p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-2">
+                <div className="md:col-span-2 flex items-center gap-3 p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-1">
                   <input 
                     type="checkbox" 
                     id="isFeaturedProductCheckbox"
@@ -2912,6 +2928,55 @@ export default function AdminDashboard({ isArabic, onClose, user }: AdminDashboa
                   <label htmlFor="isFeaturedProductCheckbox" className="text-xs text-slate-700 font-bold cursor-pointer select-none">
                     {isArabic ? 'عرض هذا المنتج في قسم "المنتجات المميزة" (Featured Products) بالصفحة الرئيسية' : 'Show this product in the "Featured Products" homepage section'}
                   </label>
+                </div>
+
+                {/* Summer Offer Toggle & Price */}
+                <div className="md:col-span-2 p-4 bg-rose-50/40 rounded-2xl border-2 border-rose-100/50 mb-2 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      id="isOnOfferCheckbox"
+                      checked={productForm.isOnOffer} 
+                      onChange={(e) => setProductForm({...productForm, isOnOffer: e.target.checked})}
+                      className="w-4.5 h-4.5 rounded text-rose-600 focus:ring-rose-500 cursor-pointer" 
+                    />
+                    <label htmlFor="isOnOfferCheckbox" className="text-xs text-slate-700 font-black cursor-pointer select-none">
+                      {isArabic ? 'إدراج المنتج في صفحة "العروض الخاصة" (Offers Page)' : 'List this product on the "Special Offers" page'}
+                    </label>
+                  </div>
+                  {productForm.isOnOffer && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in">
+                      <div>
+                        <label className="block text-rose-700 mb-1 font-black">{isArabic ? 'سعر الخصم الترويجي (ر.س)' : 'Promo Discount Price (SAR)'}</label>
+                        <input 
+                          type="number" 
+                          required={productForm.isOnOffer}
+                          placeholder={isArabic ? 'أدخل السعر المخفض' : 'Enter discounted price'}
+                          value={productForm.discountPrice || ''} 
+                          onChange={(e) => setProductForm({...productForm, discountPrice: Number(e.target.value)})}
+                          className="w-full p-2.5 bg-white border border-rose-200 rounded-xl focus:border-rose-500 focus:outline-none font-bold text-rose-600 text-xs" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-rose-700 mb-1 font-black">{isArabic ? 'تاريخ بداية العرض (اختياري)' : 'Offer Start Date (Optional)'}</label>
+                        <input 
+                          type="date" 
+                          value={productForm.offerStartDate || ''} 
+                          onChange={(e) => setProductForm({...productForm, offerStartDate: e.target.value})}
+                          className="w-full p-2.5 bg-white border border-rose-200 rounded-xl focus:border-rose-500 focus:outline-none font-bold text-rose-600 text-xs text-center" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-rose-700 mb-1 font-black">{isArabic ? 'تاريخ نهاية العرض (اختياري)' : 'Offer End Date (Optional)'}</label>
+                        <input 
+                          type="date" 
+                          value={productForm.offerEndDate || ''} 
+                          onChange={(e) => setProductForm({...productForm, offerEndDate: e.target.value})}
+                          className="w-full p-2.5 bg-white border border-rose-200 rounded-xl focus:border-rose-500 focus:outline-none font-bold text-rose-600 text-xs text-center" 
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {!editingProduct && (

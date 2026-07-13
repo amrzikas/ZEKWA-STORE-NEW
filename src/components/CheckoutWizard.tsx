@@ -47,7 +47,7 @@ export default function CheckoutWizard({
   // Dynamic Gateways & Shipping Plans
   const [gateways, setGateways] = useState<any[]>([]);
   const [shippingPlans, setShippingPlans] = useState<any[]>([]);
-  const [selectedGatewayId, setSelectedGatewayId] = useState<string>('credit_card');
+  const [selectedGatewayId, setSelectedGatewayId] = useState<string>('cod');
   const [selectedShippingPlan, setSelectedShippingPlan] = useState<any | null>(null);
 
   // Manual Receipt verification state
@@ -60,16 +60,8 @@ export default function CheckoutWizard({
       const fetched: any[] = [];
       snap.forEach(d => {
         const data = d.data();
-        if (data.status === 'active') fetched.push(data);
+        if (data.status === 'active' && data.id !== 'credit_card') fetched.push(data);
       });
-      // Always include standard credit card as default
-      const defaultCard = {
-        id: 'credit_card',
-        name: 'Credit Card',
-        nameAr: 'البطاقة الائتمانية',
-        description: 'Secure credit card payment.',
-        descriptionAr: 'الدفع المباشر والآمن عبر بطاقتك الائتمانية.'
-      };
       // Always include Cash on Delivery as a default option
       const defaultCod = {
         id: 'cod',
@@ -78,7 +70,7 @@ export default function CheckoutWizard({
         description: 'Pay cash upon receiving your order.',
         descriptionAr: 'ادفع نقداً عند استلام طلبك.'
       };
-      setGateways([defaultCard, defaultCod, ...fetched]);
+      setGateways([defaultCod, ...fetched]);
     }).catch(err => console.error("Error fetching checkout gateways: ", err));
 
     // Fetch active shipping plans from Firestore

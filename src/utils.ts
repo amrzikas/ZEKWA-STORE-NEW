@@ -107,3 +107,31 @@ export function cleanUndefined<T extends object>(obj: T): T {
   return clean;
 }
 
+/**
+ * Checks if a product is currently on offer (including date range check if specified).
+ */
+export function isProductOnOffer(prod: Product): boolean {
+  if (!prod.isOnOffer || !prod.discountPrice || prod.discountPrice >= prod.price) {
+    return false;
+  }
+  
+  if (prod.offerStartDate || prod.offerEndDate) {
+    // Get current local date in YYYY-MM-DD format
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    if (prod.offerStartDate && todayStr < prod.offerStartDate) {
+      return false;
+    }
+    if (prod.offerEndDate && todayStr > prod.offerEndDate) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+

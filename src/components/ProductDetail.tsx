@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Star, ShoppingBag, ShieldCheck, Truck, RefreshCw, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product, Review } from '../types';
-import { formatPrice } from '../utils';
+import { formatPrice, isProductOnOffer } from '../utils';
 import ProductCard from './ProductCard';
 
 interface ProductDetailProps {
@@ -145,9 +145,20 @@ export default function ProductDetail({
             <div className="p-6 bg-slate-50 border border-[#EAEAE8] rounded-3xl flex justify-between items-center max-w-md">
               <div>
                 <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider mb-0.5">{isArabic ? 'القيمة الاستثمارية' : 'Boutique Pricing'}</span>
-                <span className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
-                  {formatPrice(product.price, currency, isArabic)}
-                </span>
+                {isProductOnOffer(product) && product.discountPrice ? (
+                  <div className="flex flex-col">
+                    <span className="text-2xl sm:text-3xl font-black text-rose-600 font-mono">
+                      {formatPrice(product.discountPrice, currency, isArabic)}
+                    </span>
+                    <span className="text-xs text-slate-400 line-through font-mono">
+                      {formatPrice(product.price, currency, isArabic)}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
+                    {formatPrice(product.price, currency, isArabic)}
+                  </span>
+                )}
               </div>
               <div className="text-left font-sans" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
                 <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${

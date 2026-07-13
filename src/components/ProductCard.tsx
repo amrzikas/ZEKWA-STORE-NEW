@@ -2,7 +2,7 @@ import React from 'react';
 import { Star, Eye, ShoppingCart, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Product } from '../types';
-import { formatPrice } from '../utils';
+import { formatPrice, isProductOnOffer } from '../utils';
 
 interface ProductCardProps {
   key?: React.Key;
@@ -54,6 +54,17 @@ export default function ProductCard({ product, onSelect, onAddToCart, isArabic, 
           </div>
         )}
 
+        {/* Discount Tag */}
+        {isProductOnOffer(product) && product.discountPrice && (
+          <div className={`absolute top-10 ${isArabic ? 'left-2.5' : 'right-2.5'} bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded z-10 shadow-md animate-pulse`}>
+            <span>
+              {isArabic 
+                ? `خصم ${Math.round(((product.price - product.discountPrice) / product.price) * 100)}%` 
+                : `${Math.round(((product.price - product.discountPrice) / product.price) * 100)}% OFF`}
+            </span>
+          </div>
+        )}
+
         {/* Action Overlay Hover */}
         <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
           <button
@@ -97,7 +108,20 @@ export default function ProductCard({ product, onSelect, onAddToCart, isArabic, 
         <div className={`flex items-center justify-between mt-auto pt-2.5 border-t border-slate-100`}>
           <div>
             <span className="text-[9px] text-slate-400 block -mb-0.5">{isArabic ? 'السعر' : 'Price'}</span>
-            <span className={`${isCompact ? 'text-base' : 'text-xl'} font-black text-indigo-600`}>{formatPrice(product.price, currency, isArabic)}</span>
+            {isProductOnOffer(product) && product.discountPrice ? (
+              <div className="flex flex-col">
+                <span className={`${isCompact ? 'text-sm' : 'text-base'} font-black text-rose-600`}>
+                  {formatPrice(product.discountPrice, currency, isArabic)}
+                </span>
+                <span className="text-[10px] text-slate-400 line-through">
+                  {formatPrice(product.price, currency, isArabic)}
+                </span>
+              </div>
+            ) : (
+              <span className={`${isCompact ? 'text-base' : 'text-xl'} font-black text-indigo-600`}>
+                {formatPrice(product.price, currency, isArabic)}
+              </span>
+            )}
           </div>
 
           <button
