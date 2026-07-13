@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -28,210 +28,303 @@ export default function Hero({
   heroBg,
   heroBg2,
   heroBg3,
-  heroBg4,
-  heroLayout = 'standard'
+  heroBg4
 }: HeroProps) {
-  const images = [
-    heroBg || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1600&auto=format&fit=crop',
-    heroBg2,
-    heroBg3,
-    heroBg4
-  ].filter(Boolean) as string[];
+  // Define premium luxury image pools for each of the 3 columns
+  const col1Images = [
+    heroBg || 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1000&auto=format&fit=crop'
+  ];
 
-  const [activeIndex, setActiveIndex] = useState(0);
+  const col2Images = [
+    heroBg2 || 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=1000&auto=format&fit=crop'
+  ];
 
+  const col3Images = [
+    heroBg3 || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1000&auto=format&fit=crop',
+    heroBg4 || 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1000&auto=format&fit=crop'
+  ];
+
+  // Active slide state for each of the 3 columns
+  const [idx1, setIdx1] = useState(0);
+  const [idx2, setIdx2] = useState(0);
+  const [idx3, setIdx3] = useState(0);
+
+  // Auto-play interval for ambient movement
   useEffect(() => {
-    if (heroLayout !== 'carousel' || images.length <= 1) return;
-    const timer = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % images.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [images.length, heroLayout]);
+    const interval = setInterval(() => {
+      setIdx1((prev) => (prev + 1) % col1Images.length);
+      // Stagger other columns slightly for organic fluid rhythm
+      setTimeout(() => {
+        setIdx2((prev) => (prev + 1) % col2Images.length);
+      }, 1500);
+      setTimeout(() => {
+        setIdx3((prev) => (prev + 1) % col3Images.length);
+      }, 3000);
+    }, 12000);
 
-  const handlePrev = () => {
-    setActiveIndex((prev) => (prev - 1 + images.length) % images.length);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Column titles and labels
+  const colData = [
+    {
+      titleEn: 'Haute Couture',
+      titleAr: 'الأزياء الراقية',
+      images: col1Images,
+      index: idx1,
+      setIndex: setIdx1,
+      id: 'col-1'
+    },
+    {
+      titleEn: 'Signature Essentials',
+      titleAr: 'القطع المميزة',
+      images: col2Images,
+      index: idx2,
+      setIndex: setIdx2,
+      id: 'col-2'
+    },
+    {
+      titleEn: 'Bespoke Objects',
+      titleAr: 'التصميم المبتكر',
+      images: col3Images,
+      index: idx3,
+      setIndex: setIdx3,
+      id: 'col-3'
+    }
+  ];
+
+  // Mouse coordinate tracking for luxury cursor follower inside each column
+  const [hoveredCol, setHoveredCol] = useState<string | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const colRefs = {
+    'col-1': useRef<HTMLDivElement>(null),
+    'col-2': useRef<HTMLDivElement>(null),
+    'col-3': useRef<HTMLDivElement>(null)
   };
 
-  const handleNext = () => {
-    setActiveIndex((prev) => (prev + 1) % images.length);
+  const handleMouseMove = (colId: 'col-1' | 'col-2' | 'col-3', e: React.MouseEvent) => {
+    const ref = colRefs[colId];
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setMousePos({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+  };
+
+  // Helper to switch slide left/right on click
+  const handleColClick = (colId: string, index: number, setIndex: React.Dispatch<React.SetStateAction<number>>, imagesLength: number, e: React.MouseEvent) => {
+    // If user clicked standard chevron/controls, don't trigger column wide click
+    if ((e.target as HTMLElement).closest('.slide-control-btn')) return;
+
+    const ref = colRefs[colId as 'col-1' | 'col-2' | 'col-3'];
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const isRightSide = clickX > rect.width / 2;
+
+      if (isArabic) {
+        // Reverse direction for Arabic RTL
+        if (isRightSide) {
+          setIndex((prev) => (prev - 1 + imagesLength) % imagesLength);
+        } else {
+          setIndex((prev) => (prev + 1) % imagesLength);
+        }
+      } else {
+        if (isRightSide) {
+          setIndex((prev) => (prev + 1) % imagesLength);
+        } else {
+          setIndex((prev) => (prev - 1 + imagesLength) % imagesLength);
+        }
+      }
+    }
   };
 
   return (
     <div 
-      className="relative overflow-hidden bg-gradient-to-br from-sky-100 via-indigo-50/50 to-white text-slate-800 rounded-[3rem] pt-12 pb-16 lg:pb-24 mt-6 shadow-2xl shadow-indigo-100/40 max-w-7xl mx-auto border border-sky-100/50" 
+      className="relative w-full h-[95vh] min-h-[680px] md:min-h-[820px] overflow-hidden bg-slate-950 text-white" 
       id="zewka-hero"
     >
-      {/* Abstract light-blue glowing backdrop shapes to match the image's wavy background */}
-      <div className="absolute right-0 top-0 w-[500px] h-[500px] rounded-full bg-sky-200/40 blur-[120px] pointer-events-none -translate-y-1/2 translate-x-1/3" />
-      <div className="absolute left-0 bottom-0 w-[350px] h-[350px] rounded-full bg-indigo-200/30 blur-[100px] pointer-events-none translate-y-1/3 -translate-x-1/4" />
+      {/* 3 side-by-side rectangles with no separator */}
+      <div className="grid grid-cols-1 md:grid-cols-3 h-full w-full gap-0">
+        {colData.map((col) => {
+          const isHovered = hoveredCol === col.id;
+          const currentImage = col.images[col.index];
 
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-14 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          {/* Text block */}
-          <div className="lg:col-span-5 flex flex-col justify-center text-center lg:text-left" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="inline-block px-4 py-1.5 bg-indigo-600 text-white text-[10px] sm:text-xs font-black rounded-full uppercase tracking-widest mb-6 self-center lg:self-start shadow-lg shadow-indigo-600/10"
+          return (
+            <div
+              key={col.id}
+              ref={colRefs[col.id as 'col-1' | 'col-2' | 'col-3']}
+              onMouseEnter={() => setHoveredCol(col.id)}
+              onMouseLeave={() => setHoveredCol(null)}
+              onMouseMove={(e) => handleMouseMove(col.id as 'col-1' | 'col-2' | 'col-3', e)}
+              onClick={(e) => handleColClick(col.id, col.index, col.setIndex, col.images.length, e)}
+              className="relative h-full w-full overflow-hidden select-none cursor-pointer group border-b md:border-b-0 border-white/5"
             >
-              <span>{isArabic ? 'بوابة التسوق الذكية ★ زيوكا' : 'ZEWKA Premium Boutique ★ Live'}</span>
-            </motion.div>
+              {/* Background Luxury Image with Smooth Animation */}
+              <AnimatePresence mode="popLayout">
+                <motion.img
+                  key={col.index}
+                  src={currentImage}
+                  initial={{ opacity: 0.6, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0.5, scale: 0.98 }}
+                  transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+                  alt={isArabic ? col.titleAr : col.titleEn}
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover filter brightness-[0.7] group-hover:brightness-[0.6] group-hover:scale-[1.03] transition-all duration-700"
+                />
+              </AnimatePresence>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.15 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 leading-tight mb-5 tracking-tight font-sans"
-            >
-              {isArabic ? (
-                heroTitleAr ? (
-                  <span className="text-slate-900 bg-gradient-to-r from-indigo-800 via-indigo-600 to-sky-500 bg-clip-text text-transparent">{heroTitleAr}</span>
-                ) : (
-                  <>
-                    تسوّق ذكي<br />
-                    <span className="text-indigo-600 bg-gradient-to-r from-indigo-600 to-sky-500 bg-clip-text text-transparent">يتداخل مع واقعك.</span>
-                  </>
-                )
-              ) : (
-                heroTitle ? (
-                  <span className="text-slate-900 bg-gradient-to-r from-indigo-800 via-indigo-600 to-sky-500 bg-clip-text text-transparent">{heroTitle}</span>
-                ) : (
-                  <>
-                    Luxe Shopping<br />
-                    <span className="text-indigo-600 bg-gradient-to-r from-indigo-600 to-sky-500 bg-clip-text text-transparent">Blending with Reality.</span>
-                  </>
-                )
-              )}
-            </motion.h1>
+              {/* Dynamic Vignette / Luxury Gradient Shadow */}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-slate-950/40 pointer-events-none" />
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-              className="text-xs sm:text-sm text-slate-500 leading-relaxed mb-8 max-w-lg mx-auto lg:mx-0 font-medium font-sans"
-            >
-              {isArabic
-                ? heroSubtitleAr || 'ندمج التصميم الراقي والموضة الحصرية مع تجارب التسوق المستقبلية. استكشف فئات الملابس، العناية الطبيعية، والمستلزمات الفنية المنتقاة بعناية لتعكس فخامة ذوقك.'
-                : heroSubtitle || 'Merging state-of-the-art interactive 3D concepts with silent luxury. Browse masterfully tailored apparel, premium organic wellness, artisan home decor, and bespoke tech accessories.'}
-            </motion.p>
-
-            {/* Action buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.45 }}
-              className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
-            >
-              <button
-                onClick={onExploreClick}
-                className="w-full sm:w-auto px-8 py-3.5 text-xs font-black uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-600/20 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
+              {/* Bottom Column Metadata Block */}
+              <div 
+                className={`absolute bottom-10 left-8 right-8 z-10 transition-all duration-500 transform ${
+                  isHovered ? 'translate-y-[-8px]' : 'translate-y-0'
+                }`}
+                style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
-                <span>{isArabic ? 'ابدأ الاستكشاف' : 'Explore Curation'}</span>
-                <ArrowRight className={`w-4 h-4 ${isArabic ? 'rotate-180' : ''}`} />
-              </button>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A880] animate-pulse" />
+                  <span className="text-[10px] font-black tracking-widest text-[#C5A880] uppercase">
+                    {isArabic ? 'مجموعة حصرية' : 'EXCLUSIVE PIECES'}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-white font-sans uppercase tracking-wider drop-shadow-md">
+                  {isArabic ? col.titleAr : col.titleEn}
+                </h3>
+                <p className="text-[11px] text-slate-300 font-medium opacity-80 mt-1 max-w-[240px]">
+                  {isArabic 
+                    ? 'اضغط في أي مكان لتغيير الصورة واستعراض القطع' 
+                    : 'Click anywhere to slide and browse coordinates'}
+                </p>
 
-              <button
-                onClick={onAiClick}
-                className="w-full sm:w-auto px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600 fill-indigo-100" />
-                <span>{isArabic ? 'استشارة المساعد الذكي' : 'Consult Styling AI'}</span>
-              </button>
-            </motion.div>
-          </div>
-
-          {/* Image visual display card / Slider Carousel */}
-          <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 1, ease: 'easeOut' }}
-            className="lg:col-span-7 relative"
-          >
-            {/* Soft backdrop glow matching the image container */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-sky-400/20 to-indigo-500/10 rounded-[2.5rem] blur-2xl -z-10" />
-
-            {/* Floating Container overlapping downwards */}
-            <motion.div
-              className="relative rounded-[2.5rem] overflow-hidden shadow-[0_30px_100px_-15px_rgba(14,165,233,0.15)] border-4 border-white/80 lg:-mb-24 lg:translate-y-12 z-20 transition-transform duration-300 hover:scale-[1.01]"
-            >
-              {heroLayout === 'carousel' && images.length > 1 ? (
-                <div className="relative w-full aspect-[4/3] sm:aspect-[1.4/1]">
-                  {/* Slider Images with AnimatePresence for smooth transitions */}
-                  <AnimatePresence mode="wait">
-                    <motion.img
-                      key={activeIndex}
-                      src={images[activeIndex]}
-                      initial={{ opacity: 0, scale: 1.02 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.6 }}
-                      alt="ZEWKA Luxury Showcase"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover absolute inset-0"
+                {/* Micro dots navigation inside column */}
+                <div className="flex items-center gap-1.5 mt-4 slide-control-btn">
+                  {col.images.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => col.setIndex(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        col.index === i ? 'bg-[#C5A880] w-6' : 'bg-white/30 hover:bg-white/75 w-1.5'
+                      }`}
                     />
-                  </AnimatePresence>
-
-                  {/* Slider Arrows */}
-                  <button
-                    onClick={handlePrev}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/60 hover:bg-slate-900/80 text-white backdrop-blur-sm transition-all cursor-pointer hover:scale-105 z-30 flex items-center justify-center border border-white/10"
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={handleNext}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/60 hover:bg-slate-900/80 text-white backdrop-blur-sm transition-all cursor-pointer hover:scale-105 z-30 flex items-center justify-center border border-white/10"
-                    aria-label="Next image"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-
-                  {/* Dot Indicators */}
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-30 bg-slate-900/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                    {images.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setActiveIndex(i)}
-                        className={`w-2 h-2 rounded-full transition-all cursor-pointer ${
-                          activeIndex === i ? 'bg-indigo-500 w-4' : 'bg-white/60 hover:bg-white'
-                        }`}
-                        aria-label={`Go to slide ${i + 1}`}
-                      />
-                    ))}
-                  </div>
+                  ))}
                 </div>
-              ) : (
-                <div className="relative w-full aspect-[4/3] sm:aspect-[1.4/1]">
-                  {/* The single static hero image */}
-                  <img
-                    src={images[0]}
-                    alt="ZEWKA Boutique Interactive 3D Display"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
-                  />
-                  
-                  {/* Seamless glass-overlay card containing brand specs */}
-                  <div className={`absolute bottom-6 ${isArabic ? 'right-6 text-right' : 'left-6 text-left'} max-w-xs bg-slate-900/90 backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-2xl text-white`}>
-                    <span className="text-[10px] font-bold tracking-widest text-sky-400 uppercase block mb-1">
-                      {isArabic ? 'تصور ثلاثي الأبعاد تفاعلي' : 'INTERACTIVE CONCEPT'}
+              </div>
+
+              {/* Custom luxury cursor follower indicator on hover */}
+              {isHovered && !isMobile() && (
+                <div
+                  className="absolute pointer-events-none z-30 transition-all duration-100 ease-out -translate-x-1/2 -translate-y-1/2"
+                  style={{
+                    left: mousePos.x,
+                    top: mousePos.y
+                  }}
+                >
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md text-[#C5A880] border border-[#C5A880]/30 rounded-full w-24 h-24 shadow-2xl p-2 text-center"
+                  >
+                    <div className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase">
+                      <span>{isArabic ? 'اضغط' : 'CLICK'}</span>
+                    </div>
+                    <span className="text-[9px] text-white font-bold opacity-80 mt-1">
+                      {isArabic ? 'للتالي' : 'NEXT'}
                     </span>
-                    <h4 className="text-sm font-black mb-1.5 leading-tight">
-                      {isArabic ? 'متجر زيوكا الفاخر والمعاصر' : 'ZEWKA Storefront Experience'}
-                    </h4>
-                    <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
-                      {isArabic
-                        ? 'تجربة تسوق رقمية غامرة تجمع بين الجمال الحسي وسهولة الاختيار والدفع بلمسات ذكية.'
-                        : 'A beautifully integrated interface tailored for swift collection browsing, secure checkout, and personal tracking.'}
-                    </p>
-                  </div>
+                    <ChevronRight className={`w-4 h-4 text-[#C5A880] mt-1 ${isArabic ? 'rotate-180' : ''}`} />
+                  </motion.div>
                 </div>
               )}
-            </motion.div>
-          </motion.div>
-        </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Glassmorphic floating card dead-center of the Hero */}
+      <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="pointer-events-auto mx-4 w-full max-w-xl md:max-w-2xl text-center relative p-6 md:p-8"
+          style={{ direction: isArabic ? 'rtl' : 'ltr' }}
+        >
+          {/* Champagne light flare */}
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 h-20 bg-[#C5A880]/20 rounded-full blur-2xl pointer-events-none" />
+
+          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[#C5A880]/15 border border-[#C5A880]/25 text-[#C5A880] text-[10px] font-black rounded-full uppercase tracking-widest mb-6">
+            <Sparkles className="w-3.5 h-3.5 text-[#C5A880] animate-pulse" />
+            <span>{isArabic ? 'بوابة التسوق الحصرية' : 'ZEWKA SIGNATURE LUXURY'}</span>
+          </span>
+
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight mb-5 tracking-tight uppercase drop-shadow-md">
+            {isArabic ? (
+              heroTitleAr ? (
+                <span className="bg-gradient-to-r from-white via-slate-100 to-[#C5A880] bg-clip-text text-transparent">{heroTitleAr}</span>
+              ) : (
+                <>
+                  تسوّق نخبوّي<br />
+                  <span className="bg-gradient-to-r from-[#C5A880] via-[#E5C8A0] to-white bg-clip-text text-transparent">يُعيد تعريف الفخامة</span>
+                </>
+              )
+            ) : (
+              heroTitle ? (
+                <span className="bg-gradient-to-r from-white via-slate-100 to-[#C5A880] bg-clip-text text-transparent">{heroTitle}</span>
+              ) : (
+                <>
+                  Elite Curation<br />
+                  <span className="bg-gradient-to-r from-[#C5A880] via-[#E5C8A0] to-white bg-clip-text text-transparent">Redefining Luxury</span>
+                </>
+              )
+            )}
+          </h1>
+
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-8 max-w-md mx-auto font-medium">
+            {isArabic
+              ? heroSubtitleAr || 'ندمج أرقى تصاميم الأزياء الحصرية، العطور الفريدة، والقطع الفنية النادرة مع تجربة تفاعلية ذكية ومخصصة بالكامل.'
+              : heroSubtitle || 'Discover hand-selected collections of fine couture, bespoke fragrances, and limited-edition designer artifacts.'}
+          </p>
+
+          {/* Action buttons with Explore Shop in the center */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={onExploreClick}
+              className="w-full sm:w-auto px-8 py-4 text-xs font-black uppercase tracking-wider text-slate-950 bg-gradient-to-r from-[#C5A880] to-[#E5C8A0] hover:from-[#E5C8A0] hover:to-[#C5A880] rounded-2xl shadow-xl shadow-[#C5A880]/20 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>{isArabic ? 'استكشف المنتجات' : 'Explore Shop'}</span>
+              <ArrowRight className={`w-4 h-4 ${isArabic ? 'rotate-180' : ''} text-slate-950`} />
+            </button>
+
+            <button
+              onClick={onAiClick}
+              className="w-full sm:w-auto px-7 py-4 text-xs font-black uppercase tracking-wider text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer backdrop-blur-md"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#C5A880] fill-[#C5A880]/20 animate-pulse" />
+              <span>{isArabic ? 'مستشار المظهر الذكي' : 'Consult Styling AI'}</span>
+            </button>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Thin elegant gold top and bottom glow lines */}
+      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#C5A880]/30 to-transparent z-10" />
+      <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#C5A880]/30 to-transparent z-10" />
     </div>
   );
+}
+
+// Simple helper to detect mobile screens
+function isMobile() {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth < 768;
 }

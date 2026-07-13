@@ -622,55 +622,122 @@ export default function App() {
               </div>
 
               <div 
-                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'}`}
+                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'}`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
                 {categories.length > 0 ? (
-                  categories.map((cat) => {
+                  categories.map((cat, index) => {
                     const imageUrl = getCategoryImage(cat);
                     
+                    // Dynamic grid and height span classes for a luxurious, editorial Bento Layout
+                    let spanClass = 'w-full h-96';
+                    let titleSize = 'text-lg sm:text-xl';
+                    let isFeaturedBento = false;
+
+                    if (!isMobileScreen) {
+                      const total = categories.length;
+                      if (total === 1) {
+                        spanClass = 'col-span-full h-[500px]';
+                        titleSize = 'text-2xl sm:text-3xl lg:text-4xl';
+                        isFeaturedBento = true;
+                      } else if (total === 2) {
+                        spanClass = 'col-span-1 h-[480px]';
+                        titleSize = 'text-xl sm:text-2xl';
+                      } else {
+                        // 3 or more categories
+                        if (index === 0) {
+                          spanClass = 'col-span-1 sm:col-span-2 lg:col-span-2 lg:row-span-2 h-[500px] lg:h-[550px]';
+                          titleSize = 'text-2xl sm:text-3xl lg:text-4xl';
+                          isFeaturedBento = true;
+                        } else if (index === 1) {
+                          spanClass = 'col-span-1 lg:row-span-2 h-[500px] lg:h-[550px]';
+                          titleSize = 'text-xl sm:text-2xl';
+                          isFeaturedBento = true;
+                        } else {
+                          spanClass = 'col-span-1 h-[263px]';
+                          titleSize = 'text-base sm:text-lg lg:text-xl';
+                        }
+                      }
+                    } else {
+                      spanClass = 'min-w-[290px] flex-shrink-0 snap-start h-[420px]';
+                    }
+
                     return (
                       <motion.div
                         key={cat.id}
                         whileHover={{ y: -6, scale: 1.01 }}
                         onClick={() => {
                           setSelectedCategory(cat.id);
+                          setSelectedSubcategory('');
                           setView('catalog');
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
-                        className={`relative h-96 rounded-[2rem] overflow-hidden group cursor-pointer shadow-sm hover:shadow-2xl hover:shadow-indigo-600/10 transition-all duration-300 border-2 border-transparent hover:border-indigo-100 ${isMobileScreen ? 'min-w-[280px] flex-shrink-0 snap-start' : 'w-full'}`}
+                        className={`relative rounded-[2.5rem] overflow-hidden group cursor-pointer shadow-sm hover:shadow-2xl hover:shadow-indigo-600/10 transition-all duration-500 border-2 border-transparent hover:border-indigo-100/40 ${spanClass}`}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-900/10 z-10" />
+                        {/* Radial Hover glow */}
+                        <div className="absolute inset-0 z-20 opacity-0 group-hover:opacity-100 bg-[radial-gradient(circle_at_bottom_left,rgba(197,168,128,0.15),transparent_60%)] transition-opacity duration-700 pointer-events-none" />
+
+                        {/* Solid refined gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-slate-900/10 z-10 transition-colors duration-500 group-hover:from-slate-950/95" />
+                        
                         <img
                           src={imageUrl}
                           alt={isArabic ? cat.nameAr : cat.name}
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 ease-out"
                           referrerPolicy="no-referrer"
                           loading="lazy"
                         />
 
-                        <div className="absolute inset-x-0 bottom-0 p-6 z-20 flex flex-col justify-end h-full text-white">
-                          <span className="text-[10px] font-black tracking-widest text-indigo-300 uppercase bg-indigo-950/80 px-2.5 py-1 rounded-full w-max mb-3 backdrop-blur-md border border-indigo-500/20">
+                        <div className="absolute inset-0 p-8 z-20 flex flex-col justify-end h-full text-white" style={{ direction: isArabic ? 'rtl' : 'ltr' }}>
+                          <span className="text-[9px] font-black tracking-widest text-[#C5A880] uppercase bg-white/10 px-3 py-1 rounded-full w-max mb-3 backdrop-blur-md border border-white/5">
                             {cat.subcategories && cat.subcategories.length > 0 
-                              ? `${cat.subcategories.length} ${isArabic ? 'فئة فرعية' : 'Subcategories'}`
-                              : isArabic ? 'فئة رئيسية' : 'Main Category'}
+                              ? `${cat.subcategories.length} ${isArabic ? 'تصنيفات فرعية' : 'Subcategories'}`
+                              : isArabic ? 'مجموعة حصرية' : 'Exclusive Collection'}
                           </span>
-                          <h3 className="text-lg font-black tracking-wide">
+                          
+                          <h3 className={`${titleSize} font-black tracking-wide leading-tight group-hover:text-indigo-200 transition-colors duration-300`}>
                             {isArabic ? cat.nameAr : cat.name}
                           </h3>
-                          <p className="text-[11px] text-slate-300 font-medium mt-1.5 leading-relaxed">
+                          
+                          <p className="text-[11px] sm:text-xs text-slate-300 font-medium mt-2 leading-relaxed max-w-md opacity-85 group-hover:opacity-100 transition-opacity duration-300">
                             {cat.subcategories && cat.subcategories.length > 0
                               ? isArabic 
-                                ? `يحتوي على ${cat.subcategories.length} فئات فرعية متنوعة`
-                                : `Includes ${cat.subcategories.length} diverse subcategories`
+                                ? `تشمل أرقى ${cat.subcategories.slice(0, 3).map(s => s.nameAr).join('، ')}${cat.subcategories.length > 3 ? '...' : ''} المصممة لتلائم تطلعاتك الفاخرة.`
+                                : `Including premier selections of ${cat.subcategories.slice(0, 3).map(s => s.name).join(', ')}${cat.subcategories.length > 3 ? '...' : ''} tailored to your premium lifestyle.`
                               : isArabic
-                                ? 'استكشف مجموعة متنوعة من المنتجات'
-                                : 'Explore a diverse product collection'}
+                                ? 'استكشف قطعنا الفاخرة المنسقة بعناية لتمثل قمة الأناقة والجودة العالية.'
+                                : 'Explore our hand-curated premium pieces representing the absolute pinnacle of elite design and quality.'}
                           </p>
 
-                          <div className="mt-4 flex items-center gap-1.5 text-xs font-black text-indigo-300 group-hover:text-indigo-200 transition-colors">
+                          {/* Subcategories interactive capsules */}
+                          {cat.subcategories && cat.subcategories.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-3.5 z-30 relative max-w-full">
+                              {cat.subcategories.slice(0, isFeaturedBento ? 4 : 2).map((sub) => (
+                                <span
+                                  key={sub.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedCategory(cat.id);
+                                    setSelectedSubcategory(sub.id);
+                                    setView('catalog');
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }}
+                                  className="px-2.5 py-1 text-[9px] font-black uppercase rounded-lg bg-white/10 hover:bg-[#C5A880] hover:text-slate-950 text-white backdrop-blur-md border border-white/5 transition-all duration-300 hover:scale-105"
+                                >
+                                  {isArabic ? sub.nameAr : sub.name}
+                                </span>
+                              ))}
+                              {cat.subcategories.length > (isFeaturedBento ? 4 : 2) && (
+                                <span className="px-2 py-0.5 text-[9px] font-black rounded-lg bg-white/5 text-slate-300 backdrop-blur-md border border-white/5">
+                                  +{cat.subcategories.length - (isFeaturedBento ? 4 : 2)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="mt-5 flex items-center gap-1.5 text-xs font-black text-[#C5A880] group-hover:text-white transition-colors duration-300">
                             <span>{isArabic ? 'استكشف المجموعة' : 'Explore Curation'}</span>
-                            <span className="group-hover:translate-x-1 transition-transform">→</span>
+                            <span className="group-hover:translate-x-1.5 transition-transform duration-300">→</span>
                           </div>
                         </div>
                       </motion.div>

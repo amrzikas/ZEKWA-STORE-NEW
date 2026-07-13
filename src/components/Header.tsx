@@ -69,21 +69,36 @@ export default function Header({
     }
   };
 
+  const isHome = currentView === 'home';
+
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b-2 border-indigo-50 shadow-sm" id="zewka-header">
+    <header 
+      className={`z-40 transition-all duration-500 border-b ${
+        isHome 
+          ? 'absolute top-0 left-0 right-0 bg-gradient-to-b from-slate-950/95 via-slate-950/40 to-transparent border-transparent text-white' 
+          : 'sticky top-0 bg-white/95 backdrop-blur-md border-indigo-50 shadow-sm text-slate-800'
+      }`} 
+      id="zewka-header"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top Announcement Bar */}
-        <div className="flex items-center justify-between py-1.5 border-b border-indigo-50 text-[11px] text-slate-500 font-bold tracking-wider">
+        <div className={`flex items-center justify-between py-1.5 border-b text-[11px] font-bold tracking-wider transition-all duration-300 ${
+          isHome 
+            ? 'border-white/5 text-slate-300' 
+            : 'border-indigo-50 text-slate-500'
+        }`}>
           <div className="flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+            <Sparkles className={`w-3.5 h-3.5 ${isHome ? 'text-[#C5A880]' : 'text-indigo-600'} animate-pulse`} />
             <span>{getFreeShippingText()}</span>
           </div>
           <div className="flex items-center gap-4">
             <button 
               onClick={onToggleLang}
-              className="flex items-center gap-1 hover:text-indigo-600 transition-colors cursor-pointer"
+              className={`flex items-center gap-1 transition-colors cursor-pointer ${
+                isHome ? 'hover:text-[#C5A880]' : 'hover:text-indigo-600'
+              }`}
             >
-              <Globe className="w-3 h-3 text-indigo-600" />
+              <Globe className={`w-3 h-3 ${isHome ? 'text-[#C5A880]' : 'text-indigo-600'}`} />
               <span>{isArabic ? 'English' : 'العربية'}</span>
             </button>
             <span>{isArabic ? 'توصيل سريع وآمن' : 'Secure Premium Delivery'}</span>
@@ -104,10 +119,14 @@ export default function Header({
                 className="cursor-pointer flex flex-col animate-fade-in"
                 id="brand-logo"
               >
-                <span className="text-2xl sm:text-3xl font-black tracking-tighter text-indigo-600 font-sans">
+                <span className={`text-2xl sm:text-3xl font-black tracking-tighter font-sans transition-colors duration-500 ${
+                  isHome ? 'text-[#C5A880]' : 'text-indigo-600'
+                }`}>
                   ZEWKA
                 </span>
-                <span className="text-[9px] sm:text-[10px] font-bold tracking-widest text-slate-500 uppercase -mt-1 whitespace-nowrap">
+                <span className={`text-[9px] sm:text-[10px] font-bold tracking-widest uppercase -mt-1 whitespace-nowrap transition-colors duration-500 ${
+                  isHome ? 'text-slate-300' : 'text-slate-500'
+                }`}>
                   {isArabic ? 'بوتيك الأناقة الفاخرة' : 'Vibrant Luxury Boutique'}
                 </span>
               </motion.div>
@@ -118,7 +137,9 @@ export default function Header({
                 {user ? (
                   <button
                     onClick={onSignOut}
-                    className="p-2 text-slate-600 hover:text-red-500 hover:bg-red-50 rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center"
+                    className={`p-2 rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center ${
+                      isHome ? 'text-slate-300 hover:text-red-400 hover:bg-white/10' : 'text-slate-600 hover:text-red-500 hover:bg-red-50'
+                    }`}
                     title={isArabic ? 'تسجيل الخروج' : 'Sign Out'}
                     id="signout-button-mobile"
                   >
@@ -127,7 +148,9 @@ export default function Header({
                 ) : (
                   <button
                     onClick={onSignIn}
-                    className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center"
+                    className={`p-2 rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center ${
+                      isHome ? 'text-slate-300 hover:text-[#C5A880] hover:bg-white/10' : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50'
+                    }`}
                     title={isArabic ? 'تسجيل الدخول' : 'Sign In'}
                     id="signin-button-mobile"
                   >
@@ -138,7 +161,9 @@ export default function Header({
                 {/* Orders Tracking */}
                 <button
                   onClick={onOpenOrders}
-                  className="relative p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all duration-300 cursor-pointer"
+                  className={`relative p-2 rounded-full transition-all duration-300 cursor-pointer ${
+                    isHome ? 'text-slate-300 hover:text-[#C5A880] hover:bg-white/10' : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50'
+                  }`}
                   title={isArabic ? 'طلباتي ومشترياتي' : 'My Orders & Tracking'}
                   id="orders-button-mobile"
                 >
@@ -148,7 +173,11 @@ export default function Header({
                 {/* Cart Button */}
                 <button
                   onClick={onOpenCart}
-                  className="relative p-2.5 text-white bg-indigo-600 hover:bg-indigo-700 hover:scale-105 rounded-full transition-all duration-300 flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
+                  className={`relative p-2.5 rounded-full transition-all duration-300 flex items-center gap-1.5 cursor-pointer shadow-md ${
+                    isHome 
+                      ? 'bg-gradient-to-r from-[#C5A880] to-[#E5C8A0] text-[#0A0D14] shadow-[#C5A880]/15 hover:scale-105' 
+                      : 'text-white bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20 hover:scale-105'
+                  }`}
                   id="cart-button-mobile"
                 >
                   <ShoppingBag className="w-4 h-4" />
@@ -163,11 +192,11 @@ export default function Header({
 
             {/* Desktop Navigation Tabs */}
             <div 
-              className="hidden md:flex items-center gap-2 border-l border-indigo-50/50 pl-3 pr-1"
+              className="hidden md:flex items-center gap-2 border-l pl-3 pr-1"
               style={{ 
                 borderLeftWidth: isArabic ? 0 : '1px', 
                 borderRightWidth: isArabic ? '1px' : 0,
-                borderColor: 'rgb(224 231 255 / 0.5)',
+                borderColor: isHome ? 'rgba(255, 255, 255, 0.1)' : 'rgb(224 231 255 / 0.5)',
                 paddingLeft: isArabic ? 0 : '0.75rem',
                 paddingRight: isArabic ? '0.75rem' : 0
               }}
@@ -176,8 +205,12 @@ export default function Header({
                 onClick={() => onViewChange('home')}
                 className={`text-xs font-black tracking-wider transition-all duration-300 cursor-pointer py-1.5 px-3 rounded-xl ${
                   currentView === 'home'
-                    ? 'text-indigo-600 bg-indigo-50'
-                    : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                    ? isHome
+                      ? 'text-[#C5A880] bg-white/10'
+                      : 'text-indigo-600 bg-indigo-50'
+                    : isHome
+                      ? 'text-slate-300 hover:text-[#C5A880] hover:bg-white/5'
+                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
                 }`}
               >
                 {isArabic ? 'الرئيسية' : 'HOME'}
@@ -189,7 +222,9 @@ export default function Header({
                   className={`text-xs font-black tracking-wider transition-all duration-300 cursor-pointer py-1.5 px-3 rounded-xl flex items-center gap-1.5 border border-dashed ${
                     currentView === 'admin'
                       ? 'text-amber-600 bg-amber-50 border-amber-300'
-                      : 'text-amber-500 border-amber-200/50 bg-amber-50/10 hover:bg-amber-50'
+                      : isHome
+                        ? 'text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
+                        : 'text-amber-500 border-amber-200/50 bg-amber-50/10 hover:bg-amber-50'
                   }`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
@@ -199,13 +234,17 @@ export default function Header({
             </div>
 
             {/* Mobile Navigation Tabs */}
-            <div className="flex md:hidden items-center gap-3.5 pb-1 border-b border-indigo-50/50">
+            <div className={`flex md:hidden items-center gap-3.5 pb-1 border-b transition-colors duration-500 ${isHome ? 'border-white/5' : 'border-indigo-50/50'}`}>
               <button
                 onClick={() => onViewChange('home')}
                 className={`text-xs font-bold pb-1 transition-all cursor-pointer ${
                   currentView === 'home'
-                    ? 'text-indigo-600 border-b-2 border-indigo-600 font-black'
-                    : 'text-slate-500'
+                    ? isHome
+                      ? 'text-[#C5A880] border-b-2 border-[#C5A880] font-black'
+                      : 'text-indigo-600 border-b-2 border-indigo-600 font-black'
+                    : isHome
+                      ? 'text-slate-300'
+                      : 'text-slate-500'
                 }`}
               >
                 {isArabic ? 'الصفحة الرئيسية' : 'Home'}
@@ -217,7 +256,9 @@ export default function Header({
                   className={`text-xs font-bold pb-1 transition-all cursor-pointer flex items-center gap-1 ${
                     currentView === 'admin'
                       ? 'text-amber-600 border-b-2 border-amber-600 font-black'
-                      : 'text-amber-500'
+                      : isHome
+                        ? 'text-amber-400'
+                        : 'text-amber-500'
                   }`}
                 >
                   <span className="w-1 h-1 rounded-full bg-amber-500" />
@@ -236,7 +277,11 @@ export default function Header({
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-all duration-300 cursor-pointer shadow-sm shadow-indigo-600/5 whitespace-nowrap"
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-black rounded-xl transition-all duration-300 cursor-pointer shadow-sm whitespace-nowrap ${
+                  isHome 
+                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/5 shadow-black/20' 
+                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 shadow-indigo-600/5'
+                }`}
                 id="category-dropdown-btn"
               >
                 <span>
@@ -358,11 +403,15 @@ export default function Header({
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder={isArabic ? 'ابحث عن قطعة فاخرة...' : 'Search luxury pieces...'}
-                className="w-full pl-4 pr-10 py-2 sm:py-2.5 bg-slate-100 border border-transparent rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all duration-300"
+                className={`w-full pl-4 pr-10 py-2 sm:py-2.5 border rounded-xl text-xs transition-all duration-300 focus:outline-none focus:ring-2 ${
+                  isHome 
+                    ? 'bg-white/10 border-white/5 text-white placeholder-slate-400 focus:bg-white/25 focus:border-[#C5A880] focus:ring-[#C5A880]/10' 
+                    : 'bg-slate-100 border-transparent text-slate-800 placeholder-slate-400 focus:bg-white focus:border-indigo-400 focus:ring-indigo-100'
+                }`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
                 id="search-input"
               />
-              <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 ${isArabic ? 'left-3.5' : 'right-3.5'}`} />
+              <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 ${isArabic ? 'left-3.5' : 'right-3.5'} ${isHome ? 'text-slate-300' : 'text-slate-400'}`} />
             </div>
           </div>
 
@@ -373,7 +422,11 @@ export default function Header({
               <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-1.5 p-1 px-2.5 border border-indigo-100 hover:border-indigo-200 hover:bg-indigo-50/50 rounded-xl transition-all duration-300 cursor-pointer"
+                  className={`flex items-center gap-1.5 p-1 px-2.5 border rounded-xl transition-all duration-300 cursor-pointer ${
+                    isHome 
+                      ? 'border-white/15 hover:border-white/30 hover:bg-white/10' 
+                      : 'border-indigo-100 hover:border-indigo-200 hover:bg-indigo-50/50'
+                  }`}
                   id="profile-dropdown-btn"
                 >
                   {user.photoURL ? (
@@ -388,7 +441,7 @@ export default function Header({
                       {user.displayName ? user.displayName.slice(0, 2) : (user.email ? user.email.slice(0, 2) : 'U')}
                     </div>
                   )}
-                  <span className="text-xs font-black text-slate-700 hidden sm:inline max-w-[100px] truncate">
+                  <span className={`text-xs font-black hidden sm:inline max-w-[100px] truncate ${isHome ? 'text-slate-200' : 'text-slate-700'}`}>
                     {user.displayName || (isArabic ? 'الحساب' : 'Account')}
                   </span>
                   <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
@@ -430,7 +483,11 @@ export default function Header({
             ) : (
               <button
                 onClick={onSignIn}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-100 hover:border-indigo-200 text-xs font-black text-indigo-600 hover:bg-indigo-50/50 rounded-xl transition-all duration-300 cursor-pointer shadow-sm shadow-indigo-600/5 whitespace-nowrap"
+                className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-black rounded-xl transition-all duration-300 cursor-pointer shadow-sm whitespace-nowrap ${
+                  isHome 
+                    ? 'border-white/15 hover:border-white/30 text-white hover:bg-white/10' 
+                    : 'border-indigo-100 hover:border-indigo-200 text-indigo-600 hover:bg-indigo-50/50 shadow-indigo-600/5'
+                }`}
                 id="signin-button"
               >
                 <UserIcon className="w-4 h-4" />
@@ -441,7 +498,9 @@ export default function Header({
             {/* Orders Tracking */}
             <button
               onClick={onOpenOrders}
-              className="relative p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all duration-300 cursor-pointer"
+              className={`relative p-2 rounded-full transition-all duration-300 cursor-pointer ${
+                isHome ? 'text-slate-300 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50'
+              }`}
               title={isArabic ? 'طلباتي ومشترياتي' : 'My Orders & Tracking'}
               id="orders-button"
             >
@@ -451,7 +510,11 @@ export default function Header({
             {/* Cart Button */}
             <button
               onClick={onOpenCart}
-              className="relative p-2.5 text-white bg-indigo-600 hover:bg-indigo-700 hover:scale-105 rounded-full transition-all duration-300 flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
+              className={`relative p-2.5 rounded-full transition-all duration-300 flex items-center gap-1.5 cursor-pointer shadow-md ${
+                isHome 
+                  ? 'bg-gradient-to-r from-[#C5A880] to-[#E5C8A0] text-[#0A0D14] shadow-[#C5A880]/15 hover:scale-105' 
+                  : 'text-white bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20 hover:scale-105'
+              }`}
               id="cart-button"
             >
               <ShoppingBag className="w-4 h-4" />
