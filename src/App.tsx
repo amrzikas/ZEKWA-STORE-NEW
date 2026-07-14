@@ -25,18 +25,8 @@ export default function App() {
   const [view, setView] = useState<'home' | 'catalog' | 'detail' | 'checkout' | 'orders' | 'admin' | 'offers'>('home');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Real mobile screen detection (independent of the viewport scale)
-  const [isMobileScreen, setIsMobileScreen] = useState(false);
-  useEffect(() => {
-    const checkMobile = () => {
-      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isSmallScreen = window.screen.width < 768 || window.innerWidth < 1024;
-      setIsMobileScreen(isMobileUA || isSmallScreen);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // Real mobile screen detection - disabled to enforce desktop-quality grid layout on mobile screens
+  const isMobileScreen = false;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -623,7 +613,7 @@ export default function App() {
               </div>
 
               <div 
-                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'}`}
+                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-6'}`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
                 {categories.length > 0 ? (
@@ -790,7 +780,7 @@ export default function App() {
               </div>
 
               <div 
-                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8'}`}
+                className={`${isMobileScreen ? 'flex overflow-x-auto pb-4 gap-6 scroll-smooth snap-x snap-mandatory scrollbar-thin' : 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-8'}`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
                 {products.filter(p => p.isFeatured).slice(0, 4).map(prod => (
@@ -810,11 +800,11 @@ export default function App() {
             {/* Summer 2026 Exclusive Campaign Ad Block */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
               <div 
-                className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
+                className="grid grid-cols-12 gap-8 items-stretch"
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
                 {/* Promo Card 1: Main Banner */}
-                <div className="lg:col-span-8 bg-slate-950 text-white rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-xl border border-white/5">
+                <div className="col-span-8 bg-slate-950 text-white rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-xl border border-white/5">
                   <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/60 to-transparent z-10 animate-fade-in" />
                   <img 
                     src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop"
@@ -852,7 +842,7 @@ export default function App() {
                 </div>
 
                 {/* Promo Card 2: Interactive Countdown/Teaser */}
-                <div className="lg:col-span-4 bg-gradient-to-br from-rose-950 via-[#2E0B11] to-[#140205] text-white rounded-[2.5rem] p-8 relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-xl border border-rose-500/10">
+                <div className="col-span-4 bg-gradient-to-br from-rose-950 via-[#2E0B11] to-[#140205] text-white rounded-[2.5rem] p-8 relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-xl border border-rose-500/10">
                   <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-rose-600/25 blur-2xl pointer-events-none" />
                   
                   <div className="space-y-4">
@@ -986,11 +976,11 @@ export default function App() {
                   ) : (
                     /* Desktop Grid layout */
                     <div 
-                      className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
+                      className="grid grid-cols-12 gap-8 items-stretch"
                       style={{ direction: isArabic ? 'rtl' : 'ltr' }}
                     >
                       {/* Category Banner Card */}
-                      <div className={`lg:col-span-4 flex flex-col justify-between p-8 rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group min-h-[350px] lg:min-h-full ${
+                      <div className={`col-span-4 flex flex-col justify-between p-8 rounded-[2.5rem] relative overflow-hidden text-white bg-slate-900 group min-h-[350px] lg:min-h-full ${
                         isEven ? 'lg:order-first' : 'lg:order-last'
                       }`}>
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/20 z-10" />
@@ -1036,7 +1026,7 @@ export default function App() {
                       </div>
 
                       {/* Associated Category Products */}
-                      <div className="lg:col-span-8 flex flex-col justify-center overflow-hidden">
+                      <div className="col-span-8 flex flex-col justify-center overflow-hidden">
                         <div className="flex items-center justify-between mb-3 px-1">
                           <span className="text-[10px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

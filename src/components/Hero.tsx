@@ -152,7 +152,7 @@ export default function Hero({
       id="zewka-hero"
     >
       {/* 3 side-by-side rectangles with no separator */}
-      <div className="grid grid-cols-1 md:grid-cols-3 h-full w-full gap-0">
+      <div className="grid grid-cols-3 h-full w-full gap-0">
         {colData.map((col) => {
           const isHovered = hoveredCol === col.id;
           const currentImage = col.images[col.index];
@@ -192,23 +192,8 @@ export default function Hero({
                 }`}
                 style={{ direction: isArabic ? 'rtl' : 'ltr' }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A880] animate-pulse" />
-                  <span className="text-[10px] font-black tracking-widest text-[#C5A880] uppercase">
-                    {isArabic ? 'مجموعة حصرية' : 'EXCLUSIVE PIECES'}
-                  </span>
-                </div>
-                <h3 className="text-xl font-black text-white font-sans uppercase tracking-wider drop-shadow-md">
-                  {isArabic ? col.titleAr : col.titleEn}
-                </h3>
-                <p className="text-[11px] text-slate-300 font-medium opacity-80 mt-1 max-w-[240px]">
-                  {isArabic 
-                    ? 'اضغط في أي مكان لتغيير الصورة واستعراض القطع' 
-                    : 'Click anywhere to slide and browse coordinates'}
-                </p>
-
                 {/* Micro dots navigation inside column */}
-                <div className="flex items-center gap-1.5 mt-4 slide-control-btn">
+                <div className="flex items-center justify-center md:justify-start gap-1.5 mt-4 slide-control-btn">
                   {col.images.map((_, i) => (
                     <button
                       key={i}
